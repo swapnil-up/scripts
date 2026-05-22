@@ -5,12 +5,13 @@ import subprocess
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from ebooklib import epub
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 # Persistence configuration
 BASE_DIR = os.path.expanduser("~/github/knowledge")
 os.makedirs(BASE_DIR, exist_ok=True)
 DB_PATH = os.path.join(BASE_DIR, "novels_digest.db")
+USER_DATA_DIR = os.path.join(BASE_DIR, ".browser_profile")
 
 def init_db():
     """Initializes the database for multi-chapter books."""
@@ -88,149 +89,230 @@ def sync_with_calibre(book_title, epub_path):
     except Exception as e:
         print(f"Failed Calibre sync: {e}")
 
+def save_diagnostic(page, name):
+    """Saves a screenshot and HTML dump for debugging."""
+    diag_dir = os.path.join(BASE_DIR, "debug")
+    os.makedirs(diag_dir, exist_ok=True)
+    ts = int(time.time())
+    
+    ss_path = os.path.join(diag_dir, f"{name}_{ts}.png")
+    html_path = os.path.join(diag_dir, f"{name}_{ts}.html")
+    
+    try:
+        page.screenshot(path=ss_path)
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(page.content())
+        print(f"  [Diagnostic] Saved screenshot to {ss_path}")
+        print(f"  [Diagnostic] Saved HTML to {html_path}")
+    except Exception as e:
+        print(f"  [Diagnostic] Failed to save diagnostics: {e}")
+
 def get_next_url(page, current_url, next_selector=None):
     """Extracts the 'Next' link using common selectors, avoiding 'Previous' links."""
+    # Ensure page is at least somewhat settled
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=5000)
+    except:
+        pass
+
+    # Some sites (RoyalRoad) might need a scroll to trigger visibility or just for lazy loading
+    try:
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        time.sleep(0.5)
+    except:
+        pass
+
     candidates = []
     if next_selector:
         candidates.append(page.locator(next_selector))
-    else:
-        # Ordered list of heuristics
-        candidates = [
-            page.locator("a[rel='next']"),
-            page.locator("[title*='ext chapter']"), 
-            page.locator("[title*='ext Chapter']"),
-            page.locator("a.next_page"),
-            page.locator("a.next-page"),
-            page.locator("a:has-text('Next')"),
-            page.locator("button:has-text('Next')"), # Added button support
-            page.locator("a:has-text('下一章')"),
-            page.locator("a:has-text('Next Chapter')"),
-            page.locator("button:has-text('Next Chapter')")
-        ]
     
-    for candidate_locator in candidates:
+    # Aggressive standard-compliant selectors
+    candidates.extend([
+        page.locator("link[rel='next']"),
+        page.locator("a[rel='next']")
+    ])
+    
+    # Aggressive AO3-specific selectors
+    if "archiveofourown.org" in current_url:
+        candidates.extend([
+            page.locator("li.chapter.next a"),
+            page.locator("li.next a"),
+            page.locator("a:has-text('Next Chapter')"),
+            page.locator("span.next a")
+        ])
+        
+    # RoyalRoad specific selectors
+    if "royalroad.com" in current_url:
+        candidates.extend([
+            page.locator("a.btn-primary:has-text('Next')"),
+            page.locator("a.btn-primary:has-text('Chapter')"),
+            page.locator(".nav-buttons a:has-text('Next')"),
+            page.locator("a:has-text('Next Chapter')")
+        ])
+
+    # General heuristics
+    candidates.extend([
+        page.locator("a[rel='next']"),
+        page.locator("[title*='ext chapter']"), 
+        page.locator("[title*='ext Chapter']"),
+        page.locator("a.next_page"),
+        page.locator("a.next-page"),
+        page.locator("a:has-text('Next')"),
+        page.locator("button:has-text('Next')")
+    ])
+    
+    for i, candidate_locator in enumerate(candidates):
         try:
             count = candidate_locator.count()
-            for i in range(count):
-                el = candidate_locator.nth(i)
-                # Be more patient for SPA buttons
-                if el.is_visible(timeout=10000):
-                    text = el.inner_text().lower()
-                    href = el.get_attribute("href")
-                    
-                    # Hard-exclude common 'Previous' patterns in text or href
-                    if any(x in text for x in ["prev", "back", "上一章"]):
-                        continue
-                    if href and any(x in href.lower() for x in ["prev", "back"]):
-                        continue
-                        
-                    if href:
-                        parsed_url = urlparse(current_url)
-                        base_domain = f"{parsed_url.scheme}://{parsed_url.netloc}"
-                        new_url = base_domain + href if href.startswith("/") else href
-                        
-                        # Smart AO3 handling: Append view_adult=true to ensure content is visible
-                        if "archiveofourown.org" in new_url and "view_adult=true" not in new_url:
-                            base_part, *fragment = new_url.split("#")
-                            sep = "&" if "?" in base_part else "?"
-                            new_url = f"{base_part}{sep}view_adult=true"
-                            if fragment:
-                                new_url += f"#{fragment[0]}"
+            for j in range(count):
+                el = candidate_locator.nth(j)
+                
+                # Check for href first (works for link[rel='next'])
+                href = el.get_attribute("href")
+                if not href: continue
 
-                        # Strip fragments for comparison
-                        clean_new = new_url.split("#")[0].split("?")[0]
-                        clean_current = current_url.split("#")[0].split("?")[0]
+                # Be more patient for visibility only if it's an interactive element
+                tag_name = el.evaluate("el => el.tagName.toLowerCase()")
+                if tag_name != "link":
+                    if not el.is_visible(timeout=3000):
+                        continue
                         
-                        if clean_new != clean_current:
-                            print(f"  [Debug] Found Next Link: {new_url}")
-                            return new_url
-                    else:
-                        # Handle SPA click
-                        print(f"  [Debug] Found Next Button (SPA Click)")
-                        old_url = page.url
-                        el.click()
-                        # Wait for URL to change OR some time to pass
-                        try:
-                            page.wait_for_url(lambda url: url != old_url, timeout=10000)
-                            return page.url
-                        except Exception:
-                            # If URL didn't change, return anyway as it might have loaded content
-                            return page.url
+                    text = el.inner_text().strip().lower()
+                    # Hard-exclude common 'Previous' patterns
+                    if any(x in text for x in ["prev", "back", "上一章", "previous"]):
+                        continue
+                    if any(x in href.lower() for x in ["prev", "back", "previous"]):
+                        continue
+                
+                if href:
+                    parsed_url = urlparse(current_url)
+                    base_domain = f"{parsed_url.scheme}://{parsed_url.netloc}"
+                    new_url = base_domain + href if href.startswith("/") else href
+                    
+                    # Smart AO3 handling: Append view_adult=true
+                    if "archiveofourown.org" in new_url and "view_adult=true" not in new_url:
+                        base_part, *fragment = new_url.split("#")
+                        sep = "&" if "?" in base_part else "?"
+                        new_url = f"{base_part}{sep}view_adult=true"
+                        if fragment:
+                            new_url += f"#{fragment[0]}"
+
+                    # Strip fragments for comparison
+                    clean_new = new_url.split("#")[0].split("?")[0]
+                    clean_current = current_url.split("#")[0].split("?")[0]
+                    
+                    if clean_new != clean_current:
+                        print(f"  Found Next Link: {new_url}")
+                        return new_url
         except Exception:
             continue
             
     return None
 
-def scrape_incremental(book_id, start_url, selector, next_selector=None, max_new=500):
-    """Scrapes new chapters starting from the provided URL."""
+def handle_ao3_gate(page):
+    """Checks for and bypasses AO3 age/tos gate efficiently."""
+    if "archiveofourown.org" not in page.url:
+        return False
+
+    gate_found = False
+    try:
+        # Check for TOS/Consent Gate
+        tos_agree = page.locator("#tos_agree")
+        if tos_agree.count() > 0 and tos_agree.is_visible(timeout=2000):
+            print("  AO3 TOS Gate detected. Accepting...")
+            tos_agree.check(force=True)
+            data_agree = page.locator("#data_processing_agree")
+            if data_agree.count() > 0 and data_agree.is_visible(timeout=500):
+                data_agree.check(force=True)
+            
+            accept_btn = page.locator("#accept_tos")
+            if accept_btn.count() > 0 and accept_btn.is_visible(timeout=500):
+                accept_btn.click(force=True)
+                page.wait_for_load_state("domcontentloaded")
+                gate_found = True
+
+        # Check for Age Gate (Proceed button)
+        proceed_btn = page.locator("input[name='commit'][value='Proceed']")
+        if proceed_btn.count() > 0 and proceed_btn.is_visible(timeout=2000):
+            print("  AO3 Age Gate detected. Proceeding...")
+            proceed_btn.click(force=True)
+            page.wait_for_load_state("domcontentloaded")
+            gate_found = True
+            
+        if gate_found:
+            time.sleep(1) # Settle
+    except Exception as e:
+        print(f"  Error handling AO3 gate: {e}")
+    
+    return gate_found
+
+def scrape_incremental(book_id, start_url, selector, next_selector=None, target_chapter=None):
+    """Scrapes new chapters starting from the provided URL until target_chapter is reached."""
     new_chapters_count = 0
     current_url = start_url
     visited_this_session = set()
     
-    # Find current max order
+    # Find current total chapters
     with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute("SELECT COUNT(*) FROM chapters WHERE book_id = ?", (book_id,))
+        current_total = cursor.fetchone()[0]
+        
         cursor = conn.execute("SELECT MAX(chapter_order) FROM chapters WHERE book_id = ?", (book_id,))
         max_order = cursor.fetchone()[0] or 0
 
+    if target_chapter and current_total >= target_chapter:
+        print(f"Target chapter {target_chapter} already reached (Current: {current_total}).")
+        return 0
+
     with sync_playwright() as p:
-        browser = p.firefox.launch(headless=True)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+        # Use a persistent context to save cookies/session
+        os.makedirs(USER_DATA_DIR, exist_ok=True)
+        context = p.firefox.launch_persistent_context(
+            USER_DATA_DIR,
+            headless=True,
+            user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
+            viewport={'width': 1280, 'height': 800}
         )
         page = context.new_page()
+        page.set_default_timeout(15000)
 
-        def handle_ao3_gate(page):
-            """Checks for and bypasses AO3 age/tos gate in a loop to handle sequential gates."""
-            for _ in range(3):  # Try up to 3 times to handle multiple sequential gates
-                gate_found = False
+        # Smart Start: Check if start_url is already in DB. If so, find the REAL start.
+        with sqlite3.connect(DB_PATH) as conn:
+            if conn.execute("SELECT 1 FROM chapters WHERE url = ?", (current_url,)).fetchone():
+                print(f"Resuming from existing chapter: {current_url}")
                 try:
-                    # 1. Handle TOS/Consent Gate
-                    # Wait briefly to see if the gate appears
-                    try:
-                        page.wait_for_selector("#tos_agree", timeout=3000, state="visible")
-                    except Exception:
-                        pass # Might not be on this page
-
-                    tos_check = page.locator("#tos_agree")
-                    data_check = page.locator("#data_processing_agree")
+                    # RoyalRoad often needs more time for CF checks or just layout
+                    page.goto(current_url, wait_until="domcontentloaded", timeout=20000)
+                    handle_ao3_gate(page)
                     
-                    if tos_check.count() > 0 and tos_check.is_visible():
-                        print("  [Debug] AO3 TOS Gate detected. Accepting...")
-                        tos_check.check(force=True)
-                        if data_check.count() > 0:
-                            data_check.check(force=True)
-                        
-                        accept_btn = page.locator("#accept_tos")
-                        if accept_btn.count() > 0:
-                            accept_btn.click(timeout=5000, force=True)
-                            page.wait_for_load_state("domcontentloaded")
-                            gate_found = True
+                    # Try to find next link
+                    next_url = get_next_url(page, current_url, next_selector)
+                    if not next_url:
+                        # Retry with scroll and more wait
+                        print("  [Debug] Next link not found immediately, scrolling and retrying...")
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                        time.sleep(3)
+                        next_url = get_next_url(page, current_url, next_selector)
                     
-                    # 2. Handle Adult Content / Age Gate
-                    try:
-                        page.wait_for_selector("input[value='Proceed']", timeout=2000, state="visible")
-                    except Exception:
-                        pass
-
-                    proceed_btn = page.locator("input[name='commit'][value='Proceed']")
-                    if proceed_btn.count() > 0 and proceed_btn.is_visible():
-                        print("  [Debug] AO3 Age Gate detected. Proceeding...")
-                        proceed_btn.click(timeout=5000, force=True)
-                        page.wait_for_load_state("domcontentloaded")
-                        gate_found = True
-                    
-                    if not gate_found:
-                        break # No gates visible, proceed to content
-                    
-                    print("  [Debug] Gate bypassed, waiting for content to settle...")
-                    time.sleep(2) # Give the page 2 seconds to settle after a click
+                    if next_url:
+                        current_url = next_url
+                        print(f"  Starting crawl at: {current_url}")
+                    else:
+                        print(f"  [Info] Could not find a 'Next' link from {current_url}.")
+                        save_diagnostic(page, "start_failure")
+                        current_url = None
                 except Exception as e:
-                    print(f"  [Debug] AO3 Gate loop error: {e}")
-                    break
-        
-        while current_url and new_chapters_count < max_new:
-            # Smart AO3 handling: Force append view_adult=true to every URL before processing
-            # Ensure it's placed before fragments (#)
+                    print(f"Error initializing crawl: {e}")
+                    save_diagnostic(page, "init_error")
+                    current_url = None
+
+        while current_url:
+            # Check target chapter condition
+            if target_chapter and current_total >= target_chapter:
+                print(f"Reached target chapter {target_chapter}.")
+                break
+
+            # Smart AO3 handling: Force append view_adult=true
             if "archiveofourown.org" in current_url and "view_adult=true" not in current_url:
                 base_part, *fragment = current_url.split("#")
                 sep = "&" if "?" in base_part else "?"
@@ -238,87 +320,65 @@ def scrape_incremental(book_id, start_url, selector, next_selector=None, max_new
                 if fragment:
                     current_url += f"#{fragment[0]}"
 
-            # Infinite loop protection
             if current_url in visited_this_session:
                 print(f"Loop detected at {current_url}. Stopping.")
                 break
             visited_this_session.add(current_url)
 
-            # Check if URL already exists in database
+            # Verification: is it already in DB?
             with sqlite3.connect(DB_PATH) as conn:
                 if conn.execute("SELECT 1 FROM chapters WHERE url = ?", (current_url,)).fetchone():
-                    print(f"Chapter already in DB: {current_url}. Advancing to find next chapter...")
+                    print(f"Chapter already in DB: {current_url}. Skipping...")
                     try:
-                        # Retry logic for advancement navigation
-                        max_retries = 3
-                        for attempt in range(max_retries):
-                            try:
-                                page.goto(current_url, wait_until="domcontentloaded", timeout=60000)
-                                break
-                            except Exception as e:
-                                if attempt < max_retries - 1:
-                                    print(f"  [Warning] Timeout advancing from {current_url}, retrying ({attempt + 1}/{max_retries})...")
-                                    time.sleep(5)
-                                else:
-                                    raise e
-
+                        page.goto(current_url, wait_until="domcontentloaded", timeout=15000)
                         handle_ao3_gate(page)
-                        
-                        # Give the page more time if it's dynamic/heavy
-                        try:
-                            page.wait_for_load_state("networkidle", timeout=15000) 
-                        except Exception:
-                            print("  [Debug] Networkidle timeout (continuing anyway...)")
-                        
-                        next_url = get_next_url(page, current_url, next_selector)
-                        
-                        if not next_url:
-                            # Diagnostic screenshot
-                            diag_path = os.path.expanduser("~/github/knowledge/debug/ao3_debug.png")
-                            os.makedirs(os.path.dirname(diag_path), exist_ok=True)
-                            page.screenshot(path=diag_path)
-                            print(f"  [Debug] Saved diagnostic screenshot to {diag_path}")
-                            print(f"[Error]: Could not extract 'Next' URL from existing chapter: {current_url}")
-                            print(f"Check if your Next selector '{next_selector if next_selector else '[Auto-Detect]'}' is still valid on this page.")
-                            break
-                            
-                        current_url = next_url
+                        current_url = get_next_url(page, current_url, next_selector)
                         continue
-                    except Exception as e:
-                        print(f"Could not advance from existing chapter: {e}")
+                    except:
                         break
 
-            print(f"Fetching: {current_url}")
+            print(f"[{current_total + 1}/{target_chapter if target_chapter else '?'}] Fetching: {current_url}")
             try:
                 # Retry logic for page navigation
-                max_retries = 3
+                max_retries = 2
                 for attempt in range(max_retries):
                     try:
-                        page.goto(current_url, wait_until="domcontentloaded", timeout=60000)
+                        page.goto(current_url, wait_until="domcontentloaded", timeout=15000)
                         break
-                    except Exception as e:
+                    except (Exception, PlaywrightTimeoutError) as e:
                         if attempt < max_retries - 1:
-                            print(f"  [Warning] Timeout fetching {current_url}, retrying ({attempt + 1}/{max_retries})...")
-                            time.sleep(5)
+                            print(f"  [Warning] Navigation timeout, retrying ({attempt + 1}/{max_retries})...")
+                            time.sleep(2)
                         else:
-                            raise e
+                            print(f"  [Warning] Final timeout on {current_url}, checking if content is visible anyway...")
+                            break
 
                 handle_ao3_gate(page)
-                page.wait_for_selector(selector, timeout=15000)
+                
+                # Check for content selector
+                try:
+                    page.wait_for_selector(selector, timeout=10000)
+                except Exception:
+                    if handle_ao3_gate(page):
+                        page.wait_for_selector(selector, timeout=10000)
+                    else:
+                        print(f"  [Error] Content selector '{selector}' not found.")
+                        save_diagnostic(page, "fetch_failure")
+                        raise Exception(f"Content selector not found.")
                 
                 page_title = page.title()
                 raw_content = page.locator(selector).first.inner_html()
                 pristine_html = clean_html_content(raw_content)
                 
-                # Preview for the first TWO new chapters of the session
-                if new_chapters_count < 2:
+                # Preview for the first new chapter of the session
+                if new_chapters_count < 1:
                     text_preview = BeautifulSoup(pristine_html, "html.parser").get_text().strip()
                     print("\n" + "="*50)
-                    print(f"PREVIEW (Chapter {new_chapters_count + 1}): {page_title}")
+                    print(f"PREVIEW: {page_title}")
                     print("-" * 50)
                     print(text_preview[:400] + "...")
                     print("="*50)
-                    confirm = input(f"\nDoes preview {new_chapters_count + 1} look correct? (y/n): ").strip().lower()
+                    confirm = input(f"\nDoes preview look correct? (y/n): ").strip().lower()
                     if confirm != 'y':
                         print("Aborting.")
                         break
@@ -331,14 +391,27 @@ def scrape_incremental(book_id, start_url, selector, next_selector=None, max_new
                     )
                 
                 new_chapters_count += 1
-                current_url = get_next_url(page, current_url, next_selector)
-                time.sleep(1.5) # Modest pacing
+                current_total += 1
+                
+                # Find the NEXT url
+                next_url = get_next_url(page, current_url, next_selector)
+                if not next_url:
+                    time.sleep(3)
+                    next_url = get_next_url(page, current_url, next_selector)
+                
+                if next_url:
+                    current_url = next_url
+                else:
+                    print(f"  [Info] No Next Link found. Reached end of content.")
+                    current_url = None
+                    
+                time.sleep(1) # Modest pacing
                 
             except Exception as e:
                 print(f"Error parsing {current_url}: {e}")
                 break
         
-        browser.close()
+        context.close()
     return new_chapters_count
 
 def compile_epub(book_id, book_title):
@@ -451,10 +524,18 @@ def main():
                 conn.execute("UPDATE books SET selector = ?, next_selector = ? WHERE id = ?", (selector, next_selector, book_id))
                 print("Selectors updated.")
 
-    max_new = input("How many NEW chapters to fetch? (Default 10): ").strip()
-    max_new = int(max_new) if max_new.isdigit() else 10
+    # Show current chapter count
+    with sqlite3.connect(DB_PATH) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM chapters WHERE book_id = ?", (book_id,)).fetchone()[0]
+        print(f"\nCurrent chapter count: {count}")
+
+    target_chapter = input("Fetch until which chapter number? (Press Enter for 10 more): ").strip()
+    if target_chapter.isdigit():
+        target_chapter = int(target_chapter)
+    else:
+        target_chapter = count + 10
     
-    new_count = scrape_incremental(book_id, start_url, selector, next_selector, max_new)
+    new_count = scrape_incremental(book_id, start_url, selector, next_selector, target_chapter)
     
     if new_count > 0:
         epub_path = compile_epub(book_id, book_title)
