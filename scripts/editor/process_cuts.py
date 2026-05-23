@@ -10,6 +10,8 @@ from utils import (
     format_time,
     sidecar_path,
     auto_output_path,
+    log,
+    log_init,
 )
 
 
@@ -24,6 +26,7 @@ def process_marked_cuts(input_file, output_file, fast=True):
 
     markers_file = sidecar_path(input_file, "markers.json")
     if not os.path.exists(markers_file):
+        log(f"FAIL: no markers file at {markers_file}")
         print(f"Error: No markers file found at {markers_file}")
         print("Run cut_marker.py first to create markers.")
         sys.exit(1)
@@ -31,11 +34,17 @@ def process_marked_cuts(input_file, output_file, fast=True):
     with open(markers_file, "r") as f:
         markers = json.load(f)
 
+    log(f"input={input_file} output={output_file} fast={fast}")
+    log(f"markers_file={markers_file} n_markers={len(markers)}")
+    log(f"raw_markers={markers}")
+
     if len(markers) == 0:
+        log("FAIL: empty markers")
         print("No markers found. Nothing to cut.")
         sys.exit(1)
 
     if len(markers) % 2 != 0:
+        log(f"FAIL: odd markers ({len(markers)})")
         print(
             f"ERROR: Odd number of markers ({len(markers)}). Each cut needs a start AND end."
         )
@@ -43,8 +52,8 @@ def process_marked_cuts(input_file, output_file, fast=True):
         sys.exit(1)
 
     duration = get_duration(input_file)
+    log(f"input_duration={duration:.3f}s")
 
-    # Build list of segments to KEEP
     segments = []
     last_end = 0
 
@@ -62,9 +71,12 @@ def process_marked_cuts(input_file, output_file, fast=True):
     if last_end < duration:
         segments.append((last_end, duration))
 
+    log(f"segments_to_keep={[(round(s,3), round(e,3), round(e-s,3)) for s,e in segments]}")
+
     print(f"\nKeeping {len(segments)} segment(s)")
 
     if len(segments) == 0:
+        log("FAIL: no segments to keep")
         print("ERROR: All video would be cut out!")
         sys.exit(1)
 
@@ -81,6 +93,7 @@ def process_marked_cuts(input_file, output_file, fast=True):
                 + codec
                 + [temp_file]
             )
+            log(f"ffmpeg_segment_{i+1}: {' '.join(str(c) for c in cmd)}")
             run_ffmpeg(cmd)
 
         print("Joining segments...")
@@ -94,11 +107,14 @@ def process_marked_cuts(input_file, output_file, fast=True):
             + codec
             + [output_file]
         )
+        log(f"ffmpeg_concat: {' '.join(str(c) for c in cmd)}")
         run_ffmpeg(cmd)
         os.unlink(concat_file)
 
         kept_duration = sum(end - start for start, end in segments)
         cut_duration = duration - kept_duration
+
+        log(f"done: kept={kept_duration:.3f}s cut={cut_duration:.3f}s output={output_file}")
 
         print(f"\n✓ Output: {output_file}")
         print(f"\nSummary:")
@@ -115,6 +131,7 @@ def process_marked_cuts(input_file, output_file, fast=True):
 
 
 if __name__ == "__main__":
+    log_init("process_cuts.py")
     if len(sys.argv) < 2:
         print("Usage: process_cuts.py INPUT [OUTPUT] [--precise]")
         print("Example: process_cuts.py raw_workout.mp4")

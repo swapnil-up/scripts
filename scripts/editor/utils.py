@@ -3,14 +3,31 @@ import subprocess
 import sys
 import os
 import json
+import datetime
 
 VEDIT_DIR = os.path.expanduser("~/vedit")
+LOG_FILE = os.path.join(VEDIT_DIR, "edit.log")
 
 
 def get_vedit_dir():
     """Return the vedit data directory, creating it if needed."""
     os.makedirs(VEDIT_DIR, exist_ok=True)
     return VEDIT_DIR
+
+
+def log_init(tool_name):
+    """Start a fresh log for this session (overwrites previous log)."""
+    os.makedirs(VEDIT_DIR, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(LOG_FILE, "w") as f:
+        f.write(f"[{ts}] === {tool_name} ===\n")
+
+
+def log(message):
+    """Append a timestamped message to the edit log."""
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(LOG_FILE, "a") as f:
+        f.write(f"[{ts}] {message}\n")
 
 
 def sidecar_path(input_file, extension):

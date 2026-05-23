@@ -1,101 +1,143 @@
-# Video Editing Scripts
+# Video Editor Pipeline
 
-This repository contains Python scripts for **marker-based video editing** and **text overlays**, designed for quick and repeatable edits.
-
-## Features
-
-* **Marker-based cutting**: Quickly mark cut points and generate trimmed videos.
-* **Text overlays**: Add timed text markers and apply them to video.
-* **Pipeline-friendly**: Scripts are designed to work together for fast, repeatable workflows.
-* **Utilities**: Includes helper functions for FFmpeg commands, validation, and duration checks.
+A suite of lightweight Python scripts for **screen recording**, **marker-based cutting**, **text overlays**, and **GIF export**. Uses mpv for marking and ffmpeg for processing — designed for potato hardware where a full video editor won't run.
 
 ## Requirements
 
-* Python 3
-* FFmpeg & FFprobe installed and in PATH
-* Standard Python libraries: `os`, `sys`, `subprocess`, `json`
+- Python 3, FFmpeg + FFprobe in PATH
+- `slop` (optional, for interactive region selection)
 
-## Scripts and Usage
+## Quick Start
 
-### 1. Marker-Based Cutting
-
-**Step 1: Mark cut points**
+### Record a screen demo → GIF
 
 ```bash
-python3 scripts/editor/marker.py /home/swap/possessions/Videos/skipping40min/VID_20260109_065251.mp4
+python3 edit.py                    # no file needed
+[1] Record screen                  # select a region, Ctrl+C to stop
+→ "Load this recording?" → yes
+[2] Convert latest recording to GIF
+→ press Enter for defaults → saved to ~/vedit/gif/
 ```
 
-* Open the video in mpv.
-* Controls:
-
-  * `m`: mark cut point
-  * `[ / ]`: decrease/increase speed
-  * `LEFT/RIGHT`: seek backward/forward 5s
-  * `UP/DOWN`: seek backward/forward 60s
-  * `SPACE`: pause/play
-  * `q`: quit and save markers
-
-**Step 2: Process the cuts**
+### Edit an existing video
 
 ```bash
-python3 scripts/editor/process_cuts.py /home/swap/possessions/Videos/skipping40min/VID_20260109_065251.mp4 /home/swap/possessions/Videos/skipping40min/trial.mp4
+python3 edit.py workout.mp4
 ```
 
-* Generates a trimmed video according to the marked cut points.
+Opens an interactive menu. Pipeline status is shown at the top:
 
-### 2. Text Overlay
+```
+  Current: workout.mp4
+  Marks define sections to REMOVE (not keep)
 
-**Step 1: Mark text positions**
+  Step                   Status
+  ──────────────────────────────────────────
+  Remove markers         4 points saved
+  Next trim output       workout_cut.mp4
+  Text markers           saved
+  Next text output       workout_text.mp4
+  ──────────────────────────────────────────
+
+  [1]  Record screen (select region)
+  [2]  Convert latest recording to GIF
+  [3]  Show info
+  [4]  Preview in mpv
+  [5]  Show which sections will be removed
+  [6]  Mark sections to REMOVE (mpv, press 'm')
+  [7]  Remove marked sections → trimmed video
+  [8]  Add text overlay markers
+  [9]  Burn text into video
+  [10] Create GIF from current video
+  [11] Run full pipeline (guided)
+```
+
+The orchestrator tracks your current file across cuts so you can trim iteratively — cut, review, cut again, then add text or export a GIF.
+
+## Scripts
+
+### `screen_record.py` — Capture screen to MP4
 
 ```bash
-python3 scripts/editor/text_marker.py /home/swap/possessions/Videos/skipping40min/trial.mp4
+python3 screen_record.py                    # full screen, auto-named
+python3 screen_record.py demo.mp4           # full screen, named
+python3 screen_record.py --select           # select region, auto-named
 ```
 
-* Place text markers where overlays should appear.
-* Controls similar to marker.py.
+Auto-saves to `~/vedit/screen_<timestamp>.mp4`. Uses `slop` for interactive
+region selection. Press Ctrl+C to stop — file is valid even if interrupted.
 
-**Step 2: Process text overlays**
+### `gif.py` — Video to GIF
 
 ```bash
-python3 scripts/editor/process_text.py /home/swap/possessions/Videos/skipping40min/trial.mp4 /home/swap/possessions/Videos/skipping40min/with_text.mp4
+python3 gif.py input.mp4 output.gif                     # whole video
+python3 gif.py input.mp4 output.gif --start 5 --duration 3
+python3 gif.py --latest demo.gif --demo                  # latest recording
 ```
 
-* Adds the marked text to the video according to the markers.
+Quality presets: `demo` (600px, 10fps), `low`, `medium`, `high`, `max`.
+Shorthand: `d`, `l`, `m`, `h`, `x`.
 
-## Utilities
+### `cut_marker.py` — Mark sections to remove
 
-Included in `scripts/editor/utils.py`:
+```bash
+python3 cut_marker.py workout.mp4
+```
 
-* `run_ffmpeg(cmd)`: execute FFmpeg commands safely.
-* `get_duration(video_file)`: returns video duration in seconds.
-* `validate_file(filepath)`: ensures input file exists.
-* Other helpers: GPU detection, preview mode, dry-run, output validation.
+Opens video in mpv. Each `m` press adds a timestamp. Marks come in pairs —
+each pair defines a section to **remove**. Saves to `~/vedit/<stem>.markers.json`.
 
-## Workflow Example
+| Key | Action |
+|-----|--------|
+| `m` | Mark cut point |
+| `[` / `]` | Speed down / up |
+| `LEFT` / `RIGHT` | Seek 5s |
+| `UP` / `DOWN` | Seek 60s |
+| `SPACE` | Pause |
+| `q` | Quit & save |
 
-# 1. Check what you're working with
-python3 info.py raw_workout.mp4
+### `process_cuts.py` — Remove marked sections
 
-# 2. Mark the boring bits to remove
-python3 cut_marker.py raw_workout.mp4
-#   → ~/vedit/raw_workout.markers.json
+```bash
+python3 process_cuts.py workout.mp4           # → workout_cut.mp4
+python3 process_cuts.py workout.mp4 out.mp4   # explicit output
+```
 
-# 3. Cut them out
-python3 process_cuts.py raw_workout.mp4
-#   → raw_workout_cut.mp4  (next to the input)
+Reads markers, extracts segments between cut pairs, concatenates them.
 
-# 4. Mark where text should appear
-python3 text_marker.py raw_workout_cut.mp4
-#   → ~/vedit/raw_workout_cut.texts.json
+### `text_marker.py` + `process_text.py` — Add text overlays
 
-# 5. Burn the text in
-python3 process_text.py raw_workout_cut.mp4
-#   → raw_workout_cut_text.mp4
+```bash
+python3 text_marker.py workout_cut.mp4        # press 't' to mark
+python3 process_text.py workout_cut.mp4 out.mp4  # burn text in
+```
 
-# 6. Make a GIF of the highlight moment
-python3 gif.py raw_workout_cut_text.mp4 highlight.gif --start 42 --duration 6 --quality high
+Text markers saved as `<video>.texts.json`. Prompts for text, duration,
+position, font size, and color after closing mpv.
 
-## Notes
+### `info.py` — Video metadata
 
-* Designed for **repeatable, frictionless edits**.
-* Supports preview mode to quickly check edits before full export.
+```bash
+python3 info.py video.mp4
+```
+
+Shows duration, resolution, FPS, codec, size, bitrate, audio details.
+
+## Output Locations
+
+| Output | Default path |
+|--------|-------------|
+| Screen recordings | `~/vedit/screen_<ts>.mp4` |
+| Cut markers | `~/vedit/<stem>.markers.json` |
+| Trimmed video | Next to input as `<stem>_cut.mp4` |
+| Text markers | `<input>.texts.json` |
+| Text video | Next to input as `<stem>_text.mp4` |
+| GIFs | `~/vedit/gif/<stem>.gif` |
+| Session log | `~/vedit/edit.log` (overwritten each run) |
+
+## Design Notes
+
+- **Potato-friendly**: mpv + ffmpeg, runs on anything.
+- **Non-destructive**: Original file is never modified.
+- **Repeatable**: Mark once, re-process with different settings.
+- **Unix-y**: Each script does one thing; the orchestrator composes them.
