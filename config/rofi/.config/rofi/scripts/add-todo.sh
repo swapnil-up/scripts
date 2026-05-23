@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TODO_FILE="$HOME/.config/conky/todo.txt"
+TODO_FILE="$HOME/.local/share/todos/todo.txt"
 
 # Rofi prompt for new todo
 NEW_TODO=$(rofi -dmenu -p "Add todo:" -lines 0)

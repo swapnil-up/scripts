@@ -195,17 +195,6 @@ def handle_command(base, sub, rest):
                 [home / "github/scripts/scripts/rofi/rofi-todo-add.sh", base]
             )
 
-    # elif base == "p":
-    #     if not rest:
-    #         subprocess.run([home / "github/scripts/scripts/rofi/rofi-projects.sh"])
-    #     else:
-    #         for d in ["github", "github/work", "github/side-hustle"]:
-    #             path = home / d / rest
-    #             if path.exists():
-    #                 subprocess.run(["code", str(path)])
-    #                 return
-    #         subprocess.run([home / "github/scripts/scripts/rofi/rofi-projects.sh"])
-
     elif base in ["n", "til", "why", "hmm"]:
         if rest:
             subprocess.run(

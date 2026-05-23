@@ -186,9 +186,6 @@ zle -N clear-empty-enter
 # Bind the Enter key (standardly '^M') to our new widget
 bindkey '^M' clear-empty-enter
 
-# Setup zoxide for quicker searching
-eval "$(zoxide init zsh)"
-
 # opencode
 export PATH=/home/swap/.opencode/bin:$PATH
 # lean 

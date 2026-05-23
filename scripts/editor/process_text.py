@@ -2,14 +2,7 @@
 import sys
 import json
 import os
-from utils import run_ffmpeg, validate_file
-
-
-def format_time(seconds):
-    """Convert seconds to HH:MM:SS.ms"""
-    mins, secs = divmod(seconds, 60)
-    hours, mins = divmod(mins, 60)
-    return f"{int(hours):02d}:{int(mins):02d}:{secs:06.3f}"
+from utils import run_ffmpeg, validate_file, format_time
 
 
 def process_text_overlays(input_file, output_file):

@@ -212,7 +212,6 @@ if [ "$mode" = "nvidia" ]; then
 	toggle_nvidia $*
 elif [ "$mode" = "$compositor" ]; then
 	toggle_compositor $*
-	exec setxkbmap -option 'altwin:swap_lalt_lwin'
 else
 	toggle_ddc $*
 fi
@@ -222,5 +221,3 @@ if (($? == 0)); then
 else
 	echo "$mode: toggle failed"
 fi
-
-exec setxkbmap -option 'altwin:swap_lalt_lwin'

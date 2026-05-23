@@ -1,7 +1,7 @@
 #!/bin/bash
 
-TODO_FILE="$HOME/.config/conky/todo.txt"
-DONE_FILE="$HOME/.config/conky/todo-done.txt"
+TODO_FILE="$HOME/.local/share/todos/todo.txt"
+DONE_FILE="$HOME/.local/share/todos/completed.txt"
 
 # Show current todos in rofi
 SELECTED=$(cat "$TODO_FILE" | rofi -dmenu -p "Complete todo:")

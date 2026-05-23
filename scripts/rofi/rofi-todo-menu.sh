@@ -4,15 +4,17 @@
 
 choice=$(echo -e "Add Todo\nToggle Todo\nRemove Todo\nView All" | rofi -dmenu -p "Todo Manager")
 
+TODO_SCRIPT="$HOME/github/scripts/scripts/rofi/rofi-todo-add.sh"
+
 case "$choice" in
 "Add Todo")
-	~/rofi/rofi-todo-add.sh
+	$TODO_SCRIPT t
 	;;
 "Toggle Todo")
-	~/rofi/rofi-todo-toggle.sh
+	$TODO_SCRIPT tt
 	;;
 "Remove Todo")
-	~/rofi/rofi-todo-remove.sh
+	$TODO_SCRIPT tr
 	;;
 "View All")
 	# Show all todos in a notification or terminal

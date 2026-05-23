@@ -4,10 +4,6 @@ set -euo pipefail
 echo ">>> LANGUAGES_START <<<"
 echo "--- Running Language/Runtime Installer ---"
 
-sudo apt install -y build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev pkg-config libc6-dev-i386 clang-18 libclang-common-18-dev
-
-sudo apt install -y python3-pip python3-venv python3-full
-
 if [ ! -d "$HOME/.pyenv" ]; then
 	echo "Installing Pyenv..."
 	curl https://pyenv.run | bash

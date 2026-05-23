@@ -1,5 +1,6 @@
 {
   "editor.mouseWheelZoom": true,
+  "window.autoDetectColorScheme": true,
   "emmet.includeLanguages": {
     "javascript": "javascriptreact",
   },
@@ -30,6 +31,12 @@
   },
   "[vue]": {
     "editor.defaultFormatter": "Vue.volar",
+  },
+  "[svelte]": {
+    "editor.defaultFormatter": "svelte.svelte-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "editor.pasteAs.preferences": [],
   "diffEditor.ignoreTrimWhitespace": true,
@@ -70,25 +77,40 @@
     { "before": ["<S-l>"], "commands": [":bnext"] },
 
     // splits
-    { "before": ["leader", "v"], "commands": [":vsplit"] },
-    { "before": ["leader", "s"], "commands": [":split"] },
+    { "before": ["<leader>", "v"], "commands": [":vsplit"] },
+    { "before": ["<leader>", "s"], "commands": [":split"] },
 
-    // panes
+    // UI Navigation
+    { "before": ["<leader>", "p"], "commands": ["workbench.action.quickOpen"] },
+    { "before": ["<leader>", "j"], "commands": ["workbench.action.terminal.toggleTerminal"] },
+    { "before": ["<leader>", "b"], "commands": ["workbench.action.toggleSidebarVisibility"] },
+
+    // Code Actions
+    { "before": ["<leader>", "d"], "commands": ["editor.action.revealDefinition"] },
+    { "before": ["<leader>", "f"], "commands": ["workbench.action.findInFiles"] },
+    { "before": ["<leader>", "r"], "commands": ["editor.action.rename"] },
+
+    // Moving between Panes
+    { "before": ["<leader>", "h"], "commands": ["workbench.action.focusPreviousGroup"] },
+    { "before": ["<leader>", "l"], "commands": ["workbench.action.focusNextGroup"] },
+
+    // Jumping between Editor and Terminal
+    { "before": ["<leader>", "t"], "commands": ["workbench.action.terminal.focus"] },
+    { "before": ["<leader>", "e"], "commands": ["workbench.action.focusActiveEditorGroup"] },
+
+    // Panes (up)
+    { "before": ["<leader>", "k"], "commands": ["workbench.action.focusAboveGroup"] },
+
+    // Close the current active file
     {
-      "before": ["leader", "h"],
-      "commands": ["workbench.action.focusLeftGroup"],
+      "before": ["<leader>", "q"],
+      "commands": ["workbench.action.closeActiveEditor"]
     },
+
+    // Close all OTHER files
     {
-      "before": ["leader", "j"],
-      "commands": ["workbench.action.focusBelowGroup"],
-    },
-    {
-      "before": ["leader", "k"],
-      "commands": ["workbench.action.focusAboveGroup"],
-    },
-    {
-      "before": ["leader", "l"],
-      "commands": ["workbench.action.focusRightGroup"],
+      "before": ["<leader>", "Q"],
+      "commands": ["workbench.action.closeOtherEditors"]
     },
   ],
   "vim.visualModeKeyBindingsNonRecursive": [

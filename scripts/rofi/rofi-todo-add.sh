@@ -37,7 +37,6 @@ t)
 	fi
 	;;
 
-\
 	tt)
 	# Toggle completion
 	selected=$(cat -n "$TODO_FILE" | rofi -dmenu -i -p "Toggle todo" -lines 0)

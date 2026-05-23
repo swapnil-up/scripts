@@ -20,22 +20,7 @@ else
 	echo "CMake already exists ($(cmake --version | head -n1)), skipping."
 fi
 
-
-# # 2. Raylib
-# if [ ! -f "/usr/local/include/raylib.h" ]; then
-# 	echo "Building Raylib (check setup.log for details)..."
-# 	REPO_DIR="$HOME/github/raylib"
-# 	[ ! -d "$REPO_DIR" ] && git clone --depth 1 https://github.com/raysan5/raylib.git "$REPO_DIR" >> "${LOG_FILE:-/dev/null}" 2>&1
-# 	cd "$REPO_DIR"
-# 	git pull >> "${LOG_FILE:-/dev/null}" 2>&1
-# 	mkdir -p build && cd build
-# 	cmake -DBUILD_EXAMPLES=OFF -DBUILD_GAMES=OFF .. >> "${LOG_FILE:-/dev/null}" 2>&1
-# 	make -j$(nproc) >> "${LOG_FILE:-/dev/null}" 2>&1
-# 	sudo make install >> "${LOG_FILE:-/dev/null}" 2>&1
-# 	cd - >/dev/null
-# fi
-
-# 3. Clipmenu
+# 2. Clipmenu
 if ! command -v clipmenu &>/dev/null; then
 	echo "Building Clipmenu (check setup.log for details)..."
 	REPO_DIR="$HOME/github/clipmenu"

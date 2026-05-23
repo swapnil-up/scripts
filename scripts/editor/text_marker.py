@@ -3,13 +3,7 @@ import sys
 import subprocess
 import json
 import os
-
-
-def format_time(seconds):
-    """Convert seconds to HH:MM:SS.ms"""
-    mins, secs = divmod(seconds, 60)
-    hours, mins = divmod(mins, 60)
-    return f"{int(hours):02d}:{int(mins):02d}:{secs:05.2f}"
+from utils import format_time
 
 
 def mark_text_overlays(input_file):

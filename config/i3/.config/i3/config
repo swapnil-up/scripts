@@ -310,8 +310,8 @@ for_window [window_type="utility"] floating enable
 
 # dunst and notifications
 exec --no-startup-id dunst
-exec --no-startup-id ~/scripts/battery-notifier.sh
-exec --no-startup-id ~/scripts/resource-monitor.sh
+exec --no-startup-id ~/github/scripts/scripts/battery-notifier.sh
+exec --no-startup-id ~/github/scripts/scripts/resource-monitor.sh
 
 #clipboard
 exec --no-startup-id CM_SELECTIONS=clipboard clipmenud
