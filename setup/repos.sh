@@ -4,11 +4,12 @@ set -euo pipefail
 echo ">>> REPOS_START <<<"
 echo "--- Configuring External Repositories ---"
 
-# 1. LLVM 18 (Ubuntu Jammy)
+# 1. LLVM 18 (Ubuntu — uses codename detection)
 if [ ! -f "/etc/apt/sources.list.d/llvm-18.list" ]; then
-	echo "Configuring LLVM 18 repository..."
+	CODENAME=$(lsb_release -cs 2>/dev/null || echo "jammy")
+	echo "Configuring LLVM 18 repository for $CODENAME..."
 	curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/llvm-18.gpg >/dev/null
-	echo "deb [signed-by=/usr/share/keyrings/llvm-18.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" | sudo tee /etc/apt/sources.list.d/llvm-18.list
+	echo "deb [signed-by=/usr/share/keyrings/llvm-18.gpg] http://apt.llvm.org/$CODENAME/ llvm-toolchain-$CODENAME-18 main" | sudo tee /etc/apt/sources.list.d/llvm-18.list
 fi
 
 # 2. Neovim PPA

@@ -1,16 +1,17 @@
 #!/bin/bash
+set -euo pipefail
 
-# Set thresholds
 LOW_BATTERY_LEVEL=30
 HIGH_BATTERY_LEVEL=100
 
-# Monitor battery status
-while true; do
-	# Get battery percentage
-	BATTERY_PERCENT=$(cat /sys/class/power_supply/BAT*/capacity)
+BATTERY_PATH=$(compgen -G /sys/class/power_supply/BAT* | head -1)
+if [ -z "$BATTERY_PATH" ]; then
+	exit 0
+fi
 
-	# Get charging status
-	STATUS=$(cat /sys/class/power_supply/BAT*/status)
+while true; do
+	BATTERY_PERCENT=$(cat "$BATTERY_PATH/capacity")
+	STATUS=$(cat "$BATTERY_PATH/status")
 
 	# Notify if battery is low
 	if [ "$BATTERY_PERCENT" -le "$LOW_BATTERY_LEVEL" ] && [ "$STATUS" != "Charging" ]; then

@@ -1,12 +1,16 @@
 #!/bin/bash
+set -euo pipefail
 
-# Set thresholds
 CPU_THRESHOLD=90
 MEMORY_THRESHOLD=90
 
 while true; do
-	# Get CPU usage (average over 1 second)
-	CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')
+	PREV_IDLE=$(awk '/^cpu / {print $5}' /proc/stat)
+	PREV_TOTAL=$(awk '/^cpu / {sum=$2+$3+$4+$5+$6+$7+$8+$9+$10+$11; print sum}' /proc/stat)
+	sleep 1
+	CURR_IDLE=$(awk '/^cpu / {print $5}' /proc/stat)
+	CURR_TOTAL=$(awk '/^cpu / {sum=$2+$3+$4+$5+$6+$7+$8+$9+$10+$11; print sum}' /proc/stat)
+	CPU_USAGE=$((100 * (CURR_TOTAL - PREV_TOTAL - (CURR_IDLE - PREV_IDLE)) / (CURR_TOTAL - PREV_TOTAL)))
 
 	# Get Memory usage
 	MEM_TOTAL=$(grep MemTotal /proc/meminfo | awk '{print $2}')

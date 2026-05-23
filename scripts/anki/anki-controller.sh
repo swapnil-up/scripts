@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Attempt to connect to the Bluetooth device
 echo -e "connect FF:FF:40:00:DF:97" | bluetoothctl

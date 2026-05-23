@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-DECK="testing"
+DECK="Testing"
 LOG=~/.anki_review.log
 
 echo "---- $(date) ----" >"$LOG"

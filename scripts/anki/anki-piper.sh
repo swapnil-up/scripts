@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Configuration
 DECK_NAME="Testing"
@@ -24,8 +25,11 @@ source_name="${source_name:-Unknown Application}"
 if ! curl -s --max-time 0.1 http://localhost:8765 >/dev/null; then
 	# setsid detaches it from the current process group to prevent hang
 	setsid anki >/dev/null 2>&1 &
-	# Use a shorter sleep or a loop for first-time launch
-	sleep 5
+	# Wait for AnkiConnect to be ready (up to 8s)
+	for i in {1..20}; do
+		curl -s localhost:8765 -d '{"action":"version","version":6}' | grep -q '"error":null' && break
+		sleep 0.4
+	done
 fi
 
 # 4. Construct Payload

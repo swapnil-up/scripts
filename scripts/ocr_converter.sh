@@ -1,26 +1,32 @@
 #!/bin/bash
+set -euo pipefail
 
-# Output file
 output_file="output.txt"
 
-# Clear the output file if it already exists
+if ! command -v tesseract &>/dev/null; then
+	echo "Error: tesseract is not installed."
+	exit 1
+fi
+
+shopt -s nullglob
+files=(*.jpg *.jpeg *.png *.tiff)
+shopt -u nullglob
+
+if [ ${#files[@]} -eq 0 ]; then
+	echo "No image files found (*.jpg, *.jpeg, *.png, *.tiff)"
+	exit 0
+fi
+
 >"$output_file"
 
-# Get the total number of JPG files
-total_files=$(ls *.jpg 2>/dev/null | wc -l)
-current_file=1
+total=${#files[@]}
+current=1
 
-# Loop through all JPG files in the current directory
-for x in *.jpg; do
-	echo "Processing file $current_file of $total_files: $x"
-
-	# Use Tesseract to extract text and append it to the output file
+for x in "${files[@]}"; do
+	echo "Processing file $current of $total: $x"
 	tesseract "$x" - >>"$output_file"
-
-	echo "Done $current_file of $total_files"
-
-	# Increment the current file counter
-	current_file=$((current_file + 1))
+	echo "Done $current of $total"
+	current=$((current + 1))
 done
 
 echo "OCR conversion complete. Text saved in $output_file"

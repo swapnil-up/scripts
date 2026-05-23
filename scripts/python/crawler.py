@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from ebooklib import epub
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from calibre_utils import sync_with_calibre
 
 # Persistence configuration
 BASE_DIR = os.path.expanduser("~/github/knowledge")
@@ -57,37 +58,7 @@ def clean_html_content(raw_html):
             tag.decompose()
     return str(soup)
 
-def sync_with_calibre(book_title, epub_path):
-    """Forces Calibre catalog engine to pick up binary file layout shifts."""
-    print(f"Syncing '{book_title}' with Calibre library...")
-    try:
-        # Don't use check=True here because exit code 1 means "no results"
-        search_cmd = ["calibredb", "search", f"title:\"{book_title}\""]
-        result = subprocess.run(search_cmd, capture_output=True, text=True)
-        book_ids = result.stdout.strip()
 
-        if book_ids and result.returncode == 0:
-            book_id = book_ids.split(',')[0]
-            print(f"Updating existing Calibre Book Entry ID: {book_id}")
-            add_cmd = ["calibredb", "add_format", book_id, epub_path]
-            subprocess.run(add_cmd, check=True)
-        else:
-            print(f"Adding '{book_title}' to Calibre as a brand new catalog item...")
-            add_cmd = ["calibredb", "add", epub_path]
-            subprocess.run(add_cmd, check=True)
-            
-        print("Calibre database successfully refreshed.")
-    except FileNotFoundError:
-        print("\n[Warning]: 'calibredb' command utility was not found in system PATH.")
-    except subprocess.CalledProcessError as e:
-        stderr_msg = e.stderr if e.stderr else str(e)
-        if "Another calibre program" in stderr_msg:
-            print("\n[Error]: Calibre database is locked because the Calibre desktop app is open.")
-            print("Please close Calibre and run the script again to sync.")
-        else:
-            print(f"Failed Calibre sync (Command failed): {stderr_msg}")
-    except Exception as e:
-        print(f"Failed Calibre sync: {e}")
 
 def save_diagnostic(page, name):
     """Saves a screenshot and HTML dump for debugging."""

@@ -1,7 +1,15 @@
 setup/packages.microsoft.gpg
 __pycache__
-wget-log
-scraped_content.txt
+*.pyc
+*.pyo
+*.swp
+*.swo
+*~
+.DS_Store
 .ruff_cache
 local/
 setup.log
+output.txt
+.env
+wget-log
+scraped_content.txt

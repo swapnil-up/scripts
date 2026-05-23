@@ -5,6 +5,7 @@ import subprocess
 import requests
 from bs4 import BeautifulSoup
 from ebooklib import epub
+from calibre_utils import sync_with_calibre
 
 # Establish the persistent path in ~/github/knowledge
 BASE_DIR = os.path.expanduser("~/github/knowledge")
@@ -171,36 +172,6 @@ def compile_epub_from_db():
     print(f"New clean EPUB generated with {len(rows)} chapters at: {EPUB_PATH}")
     return True
 
-def sync_with_calibre():
-    """Forces Calibre catalog engine to pick up binary file layout shifts."""
-    print("Syncing updated EPUB format with Calibre library...")
-    try:
-        search_cmd = ["calibredb", "search", f"title:\"{CALIBRE_BOOK_TITLE}\""]
-        result = subprocess.run(search_cmd, capture_output=True, text=True, check=True)
-        book_ids = result.stdout.strip()
-
-        if book_ids:
-            book_id = book_ids.split(',')[0]
-            print(f"Updating existing Calibre Book Entry ID: {book_id}")
-            add_cmd = ["calibredb", "add_format", book_id, EPUB_PATH]
-            subprocess.run(add_cmd, check=True)
-        else:
-            print("Adding digest to Calibre as a brand new catalog item...")
-            add_cmd = ["calibredb", "add", EPUB_PATH]
-            subprocess.run(add_cmd, check=True)
-            
-        print("Calibre database successfully refreshed.")
-    except FileNotFoundError:
-        print("\n[Warning]: 'calibredb' command utility was not found in system PATH.")
-        print("Compilation complete, but automated Calibre indexing skipped.")
-    except subprocess.CalledProcessError as e:
-        if "Another calibre program" in e.stderr:
-            print("\n[Error]: Calibre database is locked because the Calibre desktop app is open.")
-            print("Please close Calibre and run the script again, or update the book manually in Calibre.")
-        else:
-            print(f"Failed Calibre sync: {e.stderr if e.stderr else e}")
-    except Exception as e:
-        print(f"Failed Calibre sync: {e}")
 
 def main():
     init_db()
@@ -215,7 +186,7 @@ def main():
         inserted = fetch_and_store(url)
         if inserted:
             if compile_epub_from_db():
-                sync_with_calibre()
+                sync_with_calibre(CALIBRE_BOOK_TITLE, EPUB_PATH)
         else:
             print("No new content added. Recompilation skipped.")
     except Exception as e:
