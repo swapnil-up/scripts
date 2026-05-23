@@ -41,15 +41,17 @@ Opens an interactive menu. Pipeline status is shown at the top:
 
   [1]  Record screen (select region)
   [2]  Convert latest recording to GIF
-  [3]  Show info
-  [4]  Preview in mpv
-  [5]  Show which sections will be removed
-  [6]  Mark sections to REMOVE (mpv, press 'm')
-  [7]  Remove marked sections → trimmed video
-  [8]  Add text overlay markers
-  [9]  Burn text into video
-  [10] Create GIF from current video
-  [11] Run full pipeline (guided)
+  [3]  Join multiple clips into one
+  [4]  Show info
+  [5]  Preview in mpv
+  [6]  Audio: mute, volume, replace, mix
+  [7]  Show which sections will be removed
+  [8]  Mark sections to REMOVE (mpv, press 'm')
+  [9]  Remove marked sections → trimmed video
+  [10] Add text overlay markers
+  [11] Burn text into video
+  [12] Create GIF from current video
+  [13] Run full pipeline (guided)
 ```
 
 The orchestrator tracks your current file across cuts so you can trim iteratively — cut, review, cut again, then add text or export a GIF.
@@ -77,6 +79,27 @@ python3 gif.py --latest demo.gif --demo                  # latest recording
 
 Quality presets: `demo` (600px, 10fps), `low`, `medium`, `high`, `max`.
 Shorthand: `d`, `l`, `m`, `h`, `x`.
+
+### `audio.py` — Audio operations (mute, volume, replace, mix)
+
+```bash
+python3 audio.py input.mp4 --mute                  # remove audio
+python3 audio.py input.mp4 --volume 0.5            # reduce volume 50%
+python3 audio.py input.mp4 --replace track.wav     # replace audio track
+python3 audio.py input.mp4 --mix music.wav         # mix music over existing audio
+```
+
+Video always runs full length — no `-shortest` truncation.
+
+### `join.py` — Concatenate multiple clips
+
+```bash
+python3 join.py clip1.mp4 clip2.mp4 clip3.mp4      # join clips
+python3 join.py --latest out.mp4                   # join 3 latest recordings
+```
+
+Uses stream-copy when all clips have matching codecs; falls back to re-encode
+if needed. Auto-names output as `joined_<ts>.mp4`.
 
 ### `cut_marker.py` — Mark sections to remove
 
@@ -132,6 +155,10 @@ Shows duration, resolution, FPS, codec, size, bitrate, audio details.
 | Trimmed video | Next to input as `<stem>_cut.mp4` |
 | Text markers | `<input>.texts.json` |
 | Text video | Next to input as `<stem>_text.mp4` |
+| Joined clips | `~/vedit/joined_<ts>.mp4` |
+| Replaced/mixed audio | `~/vedit/<stem>_newaudio.mp4` |
+| Muted video | Next to input as `<stem>_muted.mp4` |
+| Volume-adjusted video | Next to input as `<stem>_vol.mp4` |
 | GIFs | `~/vedit/gif/<stem>.gif` |
 | Session log | `~/vedit/edit.log` (overwritten each run) |
 

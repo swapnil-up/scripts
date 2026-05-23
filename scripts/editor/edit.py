@@ -12,6 +12,7 @@ Usage:
 
 import sys
 import os
+import glob
 import json
 import subprocess
 from utils import (
@@ -216,13 +217,16 @@ def main():
             entries = [
                 ("Record screen (select region)", "record_screen"),
                 ("Convert latest recording to GIF", "gif_latest"),
+                ("Join multiple clips into one", "join"),
             ]
         else:
             entries = [
                 ("Record screen (select region)", "record_screen"),
                 ("Convert latest recording to GIF", "gif_latest"),
+                ("Join multiple clips into one", "join"),
                 ("Show info", "info"),
                 ("Preview in mpv", "preview"),
+                ("Audio: mute, volume, replace, mix", "audio"),
                 ("Show which sections will be removed", "show_markers"),
                 ("Mark sections to REMOVE (mpv, press 'm')", "mark_cuts"),
                 ("Remove marked sections → trimmed video", "process_cuts"),
@@ -282,8 +286,31 @@ def main():
             log(f"action=preview file={current_file}")
             open_in_mpv(current_file)
 
+        elif action == "audio":
+            if current_file is None: continue
+            log(f"action=audio file={current_file}")
+            current_file = handle_audio(current_file) or current_file
+
         elif action == "show_markers":
             show_markers(state)
+
+        elif action == "join":
+            log(f"action=join")
+            paths = input("  Clip paths (space-separated, or *.mp4): ").strip()
+            if paths:
+                clip_list = []
+                for p in paths.split():
+                    expanded = sorted(glob.glob(os.path.expanduser(p)))
+                    clip_list.extend(expanded if expanded else [p])
+                if len(clip_list) >= 2:
+                    out = input("  Output file (default: joined.mp4): ").strip() or "joined.mp4"
+                    run_script("join.py", clip_list + ["-o", out])
+                    if os.path.exists(out) and current_file is not None:
+                        if yesno("Load this joined file as current video?", default=True):
+                            current_file = os.path.abspath(out)
+                else:
+                    print("  Need at least 2 clips to join.")
+            input("  Press Enter...")
 
         elif action == "mark_cuts":
             if current_file is None: continue
@@ -372,6 +399,43 @@ def handle_gif(current_file):
     if start:
         args.extend(["--start", start])
     run_script("gif.py", args)
+
+
+def handle_audio(current_file):
+    """Interactive prompt for audio operations."""
+    from utils import auto_output_path
+    print(f"\n  Source: {current_file}")
+    print(f"  {'─' * 40}")
+    print(f"  (m)ute — remove all audio")
+    print(f"  (v)olume — adjust existing audio level")
+    print(f"  (r)eplace — swap in a new audio file")
+    print(f"  mi(x) — mix new audio with existing")
+    action = input("  Choose (m/v/r/x): ").strip().lower()
+
+    out = auto_output_path(current_file, "audio")
+    print(f"  Default output: {out}")
+
+    if action == "m":
+        run_script("audio.py", [current_file, out, "--mute"])
+    elif action == "v":
+        vol = input("  Volume level (0.0–1.0, default 0.5): ").strip() or "0.5"
+        run_script("audio.py", [current_file, out, "--volume", vol])
+    elif action == "r":
+        path = input("  Path to audio file: ").strip()
+        if path:
+            run_script("audio.py", [current_file, out, "--add", path])
+    elif action == "x":
+        path = input("  Path to audio file to mix in: ").strip()
+        vol = input("  Original volume (0.0–1.0, default 1.0): ").strip() or "1.0"
+        if path:
+            run_script("audio.py", [current_file, out, "--add", path, "--mix", "--volume", vol])
+    else:
+        print("  No action selected.")
+
+    if os.path.exists(out):
+        if yesno("Switch to this as current file?", default=True):
+            return out
+    return current_file
 
 
 def run_full_pipeline(start_file):
