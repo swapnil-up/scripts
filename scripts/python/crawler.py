@@ -177,7 +177,28 @@ def get_next_url(page, current_url, next_selector=None):
                         return new_url
         except Exception:
             continue
-            
+    
+    # Last resort: JS-click navigation for SPA sites (Next.js, etc.)
+    for selector in ["[title='Next chapter']", "[aria-label='Next chapter']",
+                     "[title='Next Chapter']", "[aria-label='Next Chapter']"]:
+        try:
+            locator = page.locator(selector)
+            if locator.count() > 0 and locator.first.is_visible(timeout=2000):
+                old_url = page.url
+                locator.first.click()
+                try:
+                    page.wait_for_function(f"window.location.href !== '{old_url}'", timeout=10000)
+                except:
+                    pass
+                new_url = page.url
+                clean_new = new_url.split("#")[0].split("?")[0]
+                clean_old = old_url.split("#")[0].split("?")[0]
+                if clean_new != clean_old:
+                    print(f"  Found Next Link (JS): {new_url}")
+                    return new_url
+        except Exception:
+            continue
+    
     return None
 
 def handle_ao3_gate(page):
@@ -453,8 +474,57 @@ def main():
     if not book_id:
         book_title = input("Enter new Book Title: ").strip()
         start_url = input("Enter the STARTING chapter URL: ").strip()
-        selector = input("Enter the CSS selector for the content block: ").strip()
-        next_selector = input("Enter CSS selector for 'Next' link (optional, press Enter for auto): ").strip()
+        
+        # Try to suggest selectors from existing book on same domain
+        selector = None
+        next_selector = None
+        parsed = urlparse(start_url)
+        domain = parsed.netloc
+        with sqlite3.connect(DB_PATH) as conn:
+            match = conn.execute(
+                "SELECT title, selector, next_selector FROM books WHERE start_url LIKE ? LIMIT 1",
+                (f"%{domain}%",)
+            ).fetchone()
+        
+        if match:
+            existing_title, suggested_selector, suggested_next = match
+            print(f"\nFound existing book '{existing_title}' from the same site.")
+            print(f"  Suggested content selector: {suggested_selector}")
+            print(f"  Suggested next selector:    {suggested_next if suggested_next else '[Auto-Detect]'}")
+            if input("Use these selectors? (Y/n): ").strip().lower() != 'n':
+                print("  Testing selector on the new URL...")
+                try:
+                    with sync_playwright() as p:
+                        ctx = p.firefox.launch_persistent_context(
+                            USER_DATA_DIR,
+                            headless=True,
+                            user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
+                            viewport={'width': 1280, 'height': 800}
+                        )
+                        page = ctx.new_page()
+                        page.set_default_timeout(15000)
+                        page.goto(start_url, wait_until="domcontentloaded", timeout=20000)
+                        handle_ao3_gate(page)
+                        page.wait_for_selector(suggested_selector, timeout=10000)
+                        raw = page.locator(suggested_selector).first.inner_html()
+                        text = BeautifulSoup(raw, "html.parser").get_text().strip()
+                        print("\n" + "=" * 50)
+                        print("PREVIEW:")
+                        print("-" * 50)
+                        print(text[:400] + ("..." if len(text) > 400 else ""))
+                        print("=" * 50)
+                        ctx.close()
+                    if input("Does this look correct? (Y/n): ").strip().lower() != 'n':
+                        selector = suggested_selector
+                        next_selector = suggested_next
+                except Exception as e:
+                    print(f"  Preview failed: {e}")
+        
+        if not selector:
+            selector = input("Enter the CSS selector for the content block: ").strip()
+            next_input = input("Enter CSS selector for 'Next' link (optional, press Enter for auto): ").strip()
+            if next_input:
+                next_selector = next_input
         
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.execute(
@@ -483,7 +553,7 @@ def main():
         print(f"  Content: {selector}")
         print(f"  Next:    {next_selector if next_selector else '[Auto-Detect]'}")
         
-        change = input("\nUpdate selectors? (y/n): ").strip().lower()
+        change = input("\nUpdate selectors? (y/N): ").strip().lower()
         if change == 'y':
             new_selector = input(f"Enter new content selector (Enter to keep '{selector}'): ").strip()
             if new_selector: selector = new_selector
@@ -499,6 +569,18 @@ def main():
     with sqlite3.connect(DB_PATH) as conn:
         count = conn.execute("SELECT COUNT(*) FROM chapters WHERE book_id = ?", (book_id,)).fetchone()[0]
         print(f"\nCurrent chapter count: {count}")
+
+    # Reference link to check what chapter you're on
+    if count > 0:
+        with sqlite3.connect(DB_PATH) as conn:
+            row = conn.execute(
+                "SELECT url FROM chapters WHERE book_id = ? ORDER BY chapter_order DESC LIMIT 1",
+                (book_id,)
+            ).fetchone()
+            if row:
+                print(f"  Last chapter: {row[0]}")
+    else:
+        print(f"  Start URL: {start_url}")
 
     target_chapter = input("Fetch until which chapter number? (Press Enter for 10 more): ").strip()
     if target_chapter.isdigit():
