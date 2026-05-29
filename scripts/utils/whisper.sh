@@ -6,11 +6,23 @@ TEMP_AUDIO="/tmp/whisper_audio.wav"
 export DISPLAY=${DISPLAY:-:0}
 
 rm -f "$TEMP_AUDIO"
-trap 'rm -f "$TEMP_AUDIO"; exit' USR1
+
+stop_recording() {
+    # Give a 500ms cushion for trailing audio/buffers before killing parecord
+    sleep 0.5
+    kill "$PARECORD_PID" 2>/dev/null
+}
+# Trap Ctrl+C (SIGINT) and your USR1 signal to trigger the graceful stop
+trap 'stop_recording' INT USR1
 
 notify-send "Whisper" "Listening... (Press 'ctrl+c' to stop)" -i audio-input-microphone
 
-parecord --format=s16le --rate=16000 --channels=1 "$TEMP_AUDIO" 2>/dev/null
+# Run parecord in the background so the script can listen for the trap
+parecord --format=s16le --rate=16000 --channels=1 "$TEMP_AUDIO" 2>/dev/null &
+PARECORD_PID=$!
+
+# Wait for parecord to finish (which happens after the trap kills it)
+wait "$PARECORD_PID" 2>/dev/null
 
 notify-send "Whisper" "Transcribing..." -i software-update-available
 
