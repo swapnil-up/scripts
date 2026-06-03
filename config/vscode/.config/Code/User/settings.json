@@ -148,11 +148,11 @@
   },
   "python.createEnvironment.trigger": "off",
   "github.copilot.enable": {
-    "*": false,
+    "*": true,
     "plaintext": false,
     "markdown": false,
     "scminput": false,
-    "css": false,
+    "css": false
   },
   "python.defaultInterpreterPath": "/bin/python3",
   "github.copilot.nextEditSuggestions.enabled": false,
