@@ -63,6 +63,7 @@ bindsym $mod+q kill
 # bindcode $mod+40 exec --no-startup-id i3-dmenu-desktop
 # bindsym $mod+d exec --no-startup-id rofi -show drun
 bindsym $mod+d exec --no-startup-id ~/github/scripts/scripts/rofi/rofi-smart-launcher.sh
+bindsym $mod+g exec --no-startup-id ~/github/scripts/scripts/rofi/fastfind-rofi.sh
 bindsym $mod+Tab exec --no-startup-id rofi -show window
 
 # change focus
