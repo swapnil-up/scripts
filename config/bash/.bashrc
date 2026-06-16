@@ -432,7 +432,9 @@ eval "$(pyenv init - bash)"
 
 # source /home/swap/github/alacritty/extra/completions/alacritty.bash
 
-# Source secrets
+# Source secrets (only if git-crypt has unlocked it — skip encrypted binary)
 if [ -f ~/.env.secret ]; then
-    source ~/.env.secret
+    case "$(file ~/.env.secret)" in
+        *text*) source ~/.env.secret ;;
+    esac
 fi

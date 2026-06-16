@@ -1,28 +1,49 @@
 #!/bin/bash
-set -euo pipefail
+set -uo pipefail
 
-LOW_BATTERY_LEVEL=30
-HIGH_BATTERY_LEVEL=100
-
-BATTERY_PATH=$(compgen -G /sys/class/power_supply/BAT* | head -1)
+BATTERY_PATH=$(compgen -G /sys/class/power_supply/BAT* | head -1) || true
 if [ -z "$BATTERY_PATH" ]; then
 	exit 0
 fi
+
+# Thresholds to warn at, in descending order
+THRESHOLDS=(30 20 15 10 5)
+notified=""
+
+notify_at() {
+	local pct=$1
+	# Only notify if we haven't already at this threshold
+	case " $notified " in
+		*" $pct "*) return ;;
+	esac
+	notify-send "Low Battery" "Battery at $pct%. Please charge!" -u critical
+	notified="$notified $pct"
+}
+
+notified_full=false
 
 while true; do
 	BATTERY_PERCENT=$(cat "$BATTERY_PATH/capacity")
 	STATUS=$(cat "$BATTERY_PATH/status")
 
-	# Notify if battery is low
-	if [ "$BATTERY_PERCENT" -le "$LOW_BATTERY_LEVEL" ] && [ "$STATUS" != "Charging" ]; then
-		notify-send "Low Battery" "Battery at $BATTERY_PERCENT%. Please charge!" -u critical
+	if [ "$STATUS" = "Charging" ]; then
+		# Reset low-battery thresholds when plugged in
+		notified=""
+		# Notify once when reaching full charge
+		if [ "$BATTERY_PERCENT" -ge 100 ] && [ "$notified_full" = false ]; then
+			notify-send "Battery Full" "Battery is fully charged." -u normal
+			notified_full=true
+		fi
+	else
+		notified_full=false
+		# Check each threshold
+		for thresh in "${THRESHOLDS[@]}"; do
+			if [ "$BATTERY_PERCENT" -le "$thresh" ]; then
+				notify_at "$thresh"
+				break
+			fi
+		done
 	fi
 
-	# Notify if battery is full
-	if [ "$BATTERY_PERCENT" -ge "$HIGH_BATTERY_LEVEL" ] && [ "$STATUS" = "Charging" ]; then
-		notify-send "Battery Full" "Battery is fully charged. Please unplug the charger." -u normal
-	fi
-
-	# Wait before checking again
 	sleep 60
 done
