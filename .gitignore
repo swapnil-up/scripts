@@ -13,3 +13,10 @@ output.txt
 .env
 wget-log
 scraped_content.txt
+
+# VS Code runtime data (stow package tracks only User/{settings,keybindings}.json)
+config/vscode/.config/Code/*
+!config/vscode/.config/Code/User/
+config/vscode/.config/Code/User/*
+!config/vscode/.config/Code/User/settings.json
+!config/vscode/.config/Code/User/keybindings.json

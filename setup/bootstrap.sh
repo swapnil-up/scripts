@@ -35,6 +35,7 @@ SCRIPTS=(
 	"flatpak.sh"    # Flatpak & Obsidian
 	"fonts.sh"      # Nerd fonts & emojis
 	"stow.sh"       # Linking dotfiles
+	"services.sh"   # Enable user services (kanata, etc.)
 )
 
 # 4. Execute scripts

@@ -14,8 +14,12 @@ fi
 
 # 2. Kanata
 if ! command -v kanata &>/dev/null; then
-	curl -L https://github.com/jtroo/kanata/releases/latest/download/kanata_linux_x64 -o "$HOME/.local/bin/kanata"
+	TEMP_KANATA=$(mktemp -d)
+	curl -L https://github.com/jtroo/kanata/releases/latest/download/linux-binaries-x64.zip -o "$TEMP_KANATA/kanata.zip"
+	unzip -o "$TEMP_KANATA/kanata.zip" -d "$TEMP_KANATA"
+	mv "$TEMP_KANATA/kanata_linux_x64" "$HOME/.local/bin/kanata"
 	chmod +x "$HOME/.local/bin/kanata"
+	rm -rf "$TEMP_KANATA"
 fi
 
 # 3. Espanso (AppImage)
