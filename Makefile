@@ -1,7 +1,7 @@
 .PHONY: format lint
 
 SHELL_FILES := $(shell find scripts setup config -name '*.sh' 2>/dev/null) \
-              config/bash/.bashrc config/zsh/.zshrc config/bash/.profile
+               config/bash/.bashrc config/bash/.profile
 PYTHON_FILES := $(shell find scripts -name '*.py' 2>/dev/null)
 
 format:

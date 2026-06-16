@@ -322,7 +322,7 @@ exec --no-startup-id CM_SELECTIONS=clipboard clipmenud
 bindsym $mod+v exec --no-startup-id env CM_SELECTIONS=clipboard CM_LAUNCHER=rofi clipmenu -i -p "Clipboard History:"
 
 # tap to click touchpad
-exec --no-startup-id xinput set-prop "$(xinput list --name-only | grep -i 'touchpad' | head -n1)" "libinput Tapping Enabled" 1
+exec --no-startup-id bash -c 'sleep 1; xinput set-prop "$(xinput list --name-only | grep -i touchpad | head -n1)" "libinput Tapping Enabled" 1'
 
 #remove window headers
 for_window [class="^.*"] border pixel 2

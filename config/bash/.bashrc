@@ -229,6 +229,11 @@ alias docker-clean=' \
 
 # alias for custom scripts
 alias k='systemctl --user restart kanata'
+
+# whisper / piper (TTS/STT utils)
+alias whisper="~/github/scripts/scripts/utils/whisper.sh"
+alias piper="~/github/scripts/scripts/utils/piper.sh"
+
 #######################################################
 # SPECIAL FUNCTIONS
 #######################################################
@@ -404,7 +409,7 @@ export PATH="$PATH":"$HOME/.pub-cache/bin"
 
 
 
-# source ~/.local/share/blesh/ble.sh
+[[ $- == *i* ]] && source ~/.local/share/blesh/ble.sh/ble.sh --attach=none
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
@@ -438,3 +443,15 @@ if [ -f ~/.env.secret ]; then
         *text*) source ~/.env.secret ;;
     esac
 fi
+
+# opencode
+export PATH=/home/swap/.opencode/bin:$PATH
+
+#THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+export SDKMAN_DIR="$HOME/.sdkman"
+[[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
+export ANDROID_HOME=$HOME/Android/Sdk
+export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+export JAVA_HOME=$HOME/.sdkman/candidates/java/current
+
+[[ ${BLE_VERSION-} ]] && ble-attach

@@ -30,6 +30,8 @@ SCRIPTS=(
 	"apt.sh"        # Main package installation
 	"system.sh"     # udev, groups, etc.
 	"languages.sh"  # Pyenv, NVM, Rust
+	"kmp.sh"        # JDK 21, Android SDK, udev rules for KMP
+	"php.sh"        # PHP CLI, extensions, Composer
 	"source.sh"     # CMake, Raylib, Clipmenu (in ~/github)
 	"binaries.sh"   # Starship, Kanata, browsers, appimages
 	"flatpak.sh"    # Flatpak & Obsidian

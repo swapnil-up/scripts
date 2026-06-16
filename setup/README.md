@@ -7,20 +7,34 @@ System bootstrap scripts. Runs on fresh Debian/Ubuntu.
 | Script | Purpose |
 |--------|---------|
 | `bootstrap.sh` | Main orchestrator |
-| `packages.sh` | APT apps, flatpaks, appimages, source builds |
+| `repos.sh` | External repositories (LLVM, Neovim, VS Code) |
+| `apt.sh` | APT packages (WM, CLI tools, build deps) |
+| `system.sh` | udev rules, groups, system config |
 | `languages.sh` | Python (pyenv), Node (nvm), Rust (rustup) |
+| `kmp.sh` | JDK 21, Android SDK for Kotlin Multiplatform |
+| `php.sh` | PHP CLI, extensions, Composer |
+| `source.sh` | Builds from source (CMake, Raylib) |
+| `binaries.sh` | Prebuilt binaries (Starship, Kanata, browsers) |
+| `flatpak.sh` | Flatpak setup & Obsidian |
+| `fonts.sh` | Nerd Fonts & emoji fonts |
+| `stow.sh` | Dotfile symlinks |
 | `services.sh` | Enable user services (kanata, etc.) |
 
 ## Flow
 
 ```
 bootstrap.sh
-  → adds PPAs (neovim, fastfetch, VS Code)
-  → runs languages.sh (pyenv, nvm, rustup)
-  → runs packages.sh (apt + extras)
+  → adds PPAs (Neovim, Fastfetch, VS Code, LLVM)
+  → installs apt packages (WM, CLI, build deps)
+  → system config (udev, groups)
+  → languages: pyenv, nvm, rustup
+  → toolchains: JDK/Android (KMP), PHP/Composer
+  → builds source projects (CMake, Raylib)
+  → installs prebuilt binaries & appimages
+  → flatpak & Obsidian
+  → Nerd Fonts + emojis
   → stows config/
   → enables user services (kanata)
-  → installs JetBrainsMono Nerd Font + Noto Color Emoji
 ```
 
 ## Run
