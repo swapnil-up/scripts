@@ -41,3 +41,7 @@ PATH=/home/swap/.local/share/umake/bin:$PATH
 #xcape -e "$spare_modifier=space"
 
 export PATH="$HOME/.elan/bin:$PATH"
+
+
+# Added by Antigravity CLI installer
+export PATH="/home/swap/.local/bin:$PATH"

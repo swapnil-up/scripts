@@ -455,3 +455,7 @@ export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-
 export JAVA_HOME=$HOME/.sdkman/candidates/java/current
 
 [[ ${BLE_VERSION-} ]] && ble-attach
+
+
+# Added by Antigravity CLI installer
+export PATH="/home/swap/.local/bin:$PATH"

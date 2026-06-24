@@ -1,18 +1,22 @@
 ---
 name: anki-smith
 description: >
-  Generates atomic Anki flashcards from review material. Exports pipe-delimited CSV (question|answer|extra). Inspired by Michael Nielsen's Anki practices. See .skills/references/neilsen-on-anki for the full essay. Use when the user says "make cards for X", "anki-smith on X", "convert my failures to cards", "generate anki cards", or after the Grand Inquisitor session. Reads any provided review material (e.g., session-log.md, chapter review). Output CSV is saved alongside the source material unless a path is specified.
+  Generates atomic Anki flashcards from review material (failures, stumbles) and from first-pass material (chat explanations, articles, chapters) where nothing has failed yet. Exports pipe-delimited CSV (question|answer|extra). Inspired by Michael Nielsen's Anki practices. See .skills/references/neilsen-on-anki for the full essay. Use when the user says "make cards for X", "anki-smith on X", "convert my failures to cards", "card this chat/explanation", "generate anki cards", or after the Grand Inquisitor session. Reads any provided source material (e.g., session-log.md, chapter review, raw chat log, article text). Output CSV is saved alongside the source material unless a path is specified.
 ---
 
 # Anki Smith
 
 ## Purpose
 
-You are a retention engineer. Your job is not to summarize what the user learned — it is to forge the exact card that will prevent them from failing the same question twice.
+You are a retention engineer. Your job is not to summarize — whether you're working from a stumble or a fresh explanation, the job is to forge the exact card that will make the underlying mechanism stick, so there's no failure to fix later.
 
 Every card must encode a **mechanism**, not a fact. "What does X do?" is trivia. "Why does X behave this way when Y?" is a card worth making.
 
 **Philosophy (from Nielsen):** Anki skill concretely instantiates your theory of how you understand. Cards should be like a sharp chisel — one precise strike per card, not a sledgehammer.
+
+**Two regimes, same standard:**
+- **Review material** (session logs, failures): you're patching a known gap. Scar tissue. The failure hands you the atomic unit pre-located — your job is just to chisel it correctly.
+- **First-pass material** (chat explanations, articles, chapters read for the first time): you're laying foundation before any gap exists. Nothing has failed yet, so there's no pre-located gap to chisel — you have to find the atomic units yourself before you can card them. See "Source: first-pass material" below.
 
 ---
 
@@ -20,7 +24,7 @@ Every card must encode a **mechanism**, not a fact. "What does X do?" is trivia.
 
 | File | Read/Write | Purpose |
 |---|---|---|
-| Source material (any `.md`) | Read | Review notes, session logs, chapter questions |
+| Source material (any `.md`) | Read | Review notes, session logs, chapter questions, chat transcripts, raw article/chapter text |
 | Output CSV | Append | Same directory as the source, named `{source-name}-anki.csv` |
 
 ---
@@ -55,6 +59,17 @@ For each question or failure in the material:
 
 1. **Identify the atomic gaps** — each gap is a thing the user got wrong or was fuzzy on.
 2. **Generate 2–4 cards per gap**, more if the concept is rich. Never 1 — avoid orphans.
+
+### Source: first-pass material (chat logs, articles, chapters — no failures yet)
+
+Use this path when the material hasn't been stress-tested yet — a chat where a concept was explained for the first time, an article, a chapter just read. There's no wrong answer to anchor to, so the decomposition has to do the work that a failure would normally do for you.
+
+1. **Restate the source in your own words first.** Don't card the original prose directly. Rewrite it in clear, concise language, preserving the meaning but stripping the verbal padding — this is a private intermediate step, not something you show the user. It's how you surface what's actually being claimed, separate from how it happened to be phrased.
+2. **Split the restatement into single-point sections.** Each section should cover exactly one claim, mechanism, or relationship. If a section is doing two jobs, split it into two.
+3. **Length-check each section.** If a section still needs more than roughly 10 words to summarize, it isn't atomic yet — split it again before carding. Never generate a card straight from a long, undecomposed section.
+4. **Card each atomic section** using the same bar as the failure path below: mechanism over fact, no definitions, no orphans, 2–4 cards per concept cluster, no yes/no framing.
+
+The card quality bar doesn't change between the two regimes — only *where the atomicity comes from*. A failure hands you the gap pre-located. Fresh material doesn't, so steps 1–3 above are how you locate it yourself before forging anything.
 
 ### Atomicity (from Nielsen)
 
@@ -149,10 +164,10 @@ If the material is sparse or the failures are vague, say so — don't pad with l
 
 ## Subagents for large batches
 
-For large batches (10+ questions or multiple chapter sections), spawn focused subagents to parallelize:
+For large batches (10+ questions, multiple chapter sections, or a long first-pass restatement), spawn focused subagents to parallelize:
 
-1. Split the material by question cluster — one subagent per 1–3 related questions
-2. Give each subagent only its slice of the review text and the card generation rules
+1. Split the material by question cluster or atomic section — one subagent per 1–3 related questions/sections
+2. Give each subagent only its slice of the source text and the relevant card generation rules (review-material rules or first-pass rules, as applicable)
 3. Review all outputs yourself before appending — catch malformed cards, fix statements that aren't questions, trim verbosity
 
 This saves your working context, lets subagents focus deeply, and runs generation in parallel.
@@ -164,5 +179,6 @@ This saves your working context, lets subagents focus deeply, and runs generatio
 After writing cards:
 - Confirm: "N cards appended to `{source-dir}/{source-name}-anki.csv`"  
 - List the topics covered (e.g., "Probability distributions, Sampling vs greedy, Output variation")
+- If sourced from first-pass material rather than failures, say so (e.g., "Sourced from raw chat log — first-pass cards, not failure-driven")
 - If the user specified a custom path, use that instead
 - Import `cards.csv` into Anki via File → Import, pipe-delimited
