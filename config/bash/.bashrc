@@ -459,3 +459,6 @@ export JAVA_HOME=$HOME/.sdkman/candidates/java/current
 
 # Added by Antigravity CLI installer
 export PATH="/home/swap/.local/bin:$PATH"
+
+# piper TTS
+export PATH="$PATH:/home/swap/github/piper_tts-1.4.2"

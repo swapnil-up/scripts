@@ -1,8 +1,12 @@
 #!/bin/bash
 
 # --- CONFIGURATION ---
-MODEL_PATH="$HOME/github/piper_tts-1.4.2/en_US-lessac-medium.onnx"
+PIPER_DIR="$HOME/github/piper_tts-1.4.2"
+MODEL_PATH="$PIPER_DIR/en_US-lessac-medium.onnx"
 DEFAULT_SPEED="0.7"
+
+export PATH="$PIPER_DIR:$PATH"
+export LD_LIBRARY_PATH="$PIPER_DIR:$LD_LIBRARY_PATH"
 
 if pgrep -x "piper" >/dev/null; then
 	pkill piper && pkill aplay

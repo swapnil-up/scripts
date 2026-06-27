@@ -1,6 +1,6 @@
 WHISPER_ROOT="$HOME/github/whisper.cpp"
 WHISPER_EXE="$WHISPER_ROOT/build/bin/whisper-cli"
-MODEL_PATH="$WHISPER_ROOT/models/ggml-base.en.bin"
+MODEL_PATH="$WHISPER_ROOT/models/ggml-small.en.bin"
 
 transcribe() {
     local audio_file="$1"

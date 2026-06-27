@@ -1,7 +1,7 @@
 #!/bin/bash
 source "$(dirname "$0")/whisper-lib.sh"
 
-TEMP_AUDIO="/tmp/whisper_audio.wav"
+TEMP_AUDIO="/tmp/whisper_audio_$$.wav"
 
 export DISPLAY=${DISPLAY:-:0}
 

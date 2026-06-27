@@ -348,6 +348,9 @@ for_window [class="^quicknote_nvim$"] floating enable, sticky enable, border pix
 # Bind a key to toggle the scratchpad
 bindsym $mod+n exec --no-startup-id ~/.local/bin/quicknote.sh
 
+# Toggle whisper recording (tap on left Alt via kanata -> f16 -> XF86Launch7)
+bindsym XF86Launch7 exec --no-startup-id ~/github/scripts/scripts/utils/whisper-toggle.sh
+
 # conky
 # exec_always --no-startup-id conky -c ~/.config/conky/conky.conf
 

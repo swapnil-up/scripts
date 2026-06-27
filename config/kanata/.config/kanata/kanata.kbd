@@ -62,7 +62,7 @@
 
   rescctl (tap-hold 150 200 esc rctl)
   spfn (tap-hold $tap-time $hold-time spc @spacefn)
-  lmet (tap-hold $tap-time $hold-time ret lmet)
+  lmet (tap-hold $tap-time $hold-time f16 lmet)
   rmall  (macro C-home C-S-end del home S-end del)
 
   bspcdel (fork bspc del (lsft rsft))
