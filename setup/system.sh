@@ -12,4 +12,8 @@ echo 'KERNEL=="uinput", MODE="0660", GROUP="uinput", OPTIONS+="static_node=uinpu
 # Brightness control (brightnessctl needs video group write access)
 sudo usermod -aG video $USER
 
+# Dark mode (GTK apps default to dark, no flash on launch)
+gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null || true
+gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark' 2>/dev/null || true
+
 echo ">>> SYSTEM_COMPLETE <<<"
