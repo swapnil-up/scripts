@@ -16,7 +16,7 @@ cd "$CONFIG_DIR"
 		# Remove any regular file in $HOME that conflicts with this package
 		# but skip files that resolve inside the repo (avoids deleting
 		# actual repo files when a parent dir is a stow symlink into the repo)
-		find "$folder" -type f | while read -r pkgfile; do
+		find "$folder" -type f -print0 | while IFS= read -r -d '' pkgfile; do
 			relpath="${pkgfile#$folder/}"
 			conflict="$HOME/$relpath"
 			if [ -e "$conflict" ] && ! [ -L "$conflict" ]; then

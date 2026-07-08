@@ -21,4 +21,10 @@ if [[ ":$XDG_DATA_DIRS:" != *":$flatpak_exports:"* ]]; then
 	export XDG_DATA_DIRS="$flatpak_exports:$XDG_DATA_DIRS"
 fi
 
+FLATPAK_PROFILE_LINE="export XDG_DATA_DIRS=\"\$HOME/.local/share/flatpak/exports/share:\$XDG_DATA_DIRS\""
+if ! grep -qxF "$FLATPAK_PROFILE_LINE" "$HOME/.profile" 2>/dev/null; then
+	echo "$FLATPAK_PROFILE_LINE" >> "$HOME/.profile"
+	echo "Persisted XDG_DATA_DIRS for flatpak to .profile"
+fi
+
 echo ">>> FLATPAK_COMPLETE <<<"

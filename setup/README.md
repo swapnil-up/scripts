@@ -13,11 +13,13 @@ System bootstrap scripts. Runs on fresh Debian/Ubuntu.
 | `languages.sh` | Python (pyenv), Node (nvm), Rust (rustup) |
 | `kmp.sh` | JDK 21, Android SDK for Kotlin Multiplatform |
 | `php.sh` | PHP CLI, extensions, Composer |
-| `source.sh` | Builds from source (CMake, Raylib) |
+| `source.sh` | Builds from source (CMake, Clipmenu) |
 | `binaries.sh` | Prebuilt binaries (Starship, Kanata, browsers) |
 | `flatpak.sh` | Flatpak setup & Obsidian |
 | `fonts.sh` | Nerd Fonts & emoji fonts |
 | `stow.sh` | Dotfile symlinks |
+| `piper.sh` | Piper TTS (downloads voice model) |
+| `whisper.sh` | Whisper.cpp speech-to-text (builds from source) |
 | `services.sh` | Enable user services (kanata, etc.) |
 
 ## Flow
@@ -29,10 +31,11 @@ bootstrap.sh
   → system config (udev, groups)
   → languages: pyenv, nvm, rustup
   → toolchains: JDK/Android (KMP), PHP/Composer
-  → builds source projects (CMake, Raylib)
+  → builds source projects (CMake, Clipmenu)
   → installs prebuilt binaries & appimages
   → flatpak & Obsidian
   → Nerd Fonts + emojis
+  → piper TTS + whisper.cpp
   → stows config/
   → enables user services (kanata)
 ```

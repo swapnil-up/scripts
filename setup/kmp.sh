@@ -12,7 +12,9 @@ else
 	echo "SDKMAN already installed, skipping..."
 fi
 
+set +u
 source "$HOME/.sdkman/bin/sdkman-init.sh"
+set -u
 
 # ── JDK 21 (Temurin) ──────────────────────────────────────────────
 if ! java -version 2>&1 | grep -q "21"; then
@@ -57,12 +59,12 @@ if ! grep -q "ANDROID_HOME" "$HOME/.bashrc" 2>/dev/null; then
 fi
 
 # ── SDK components (platform-tools, platform, build-tools) ────────
-echo "Checking SDK components..."
+echo "Installing SDK components (platform-tools, platform android-36, build-tools 36.0.0)..."
 yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
 	"platform-tools" \
 	"platforms;android-36" \
 	"build-tools;36.0.0" \
-	2>&1 | grep -E "Installing|Downloading|done" || true
+	2>&1 | grep -E "Installing|Downloading|done" || echo "  [WARN] sdkmanager may have failed — check output above"
 
 # ── udev rule for Android devices ─────────────────────────────────
 UDEV_FILE="/etc/udev/rules.d/51-android.rules"

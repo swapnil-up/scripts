@@ -23,7 +23,7 @@ APPS=(
 )
 
 for app in "${APPS[@]}"; do
-	if ! dpkg -s "$app" >/dev/null 2>&1; then
+	if ! dpkg -l "$app" 2>/dev/null | grep -q '^ii'; then
 		echo "Installing $app..."
 		sudo apt install -y "$app"
 	fi

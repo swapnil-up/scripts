@@ -13,13 +13,16 @@ if ! command -v starship &>/dev/null; then
 fi
 
 # 2. Kanata
+KANATA_TARGET="$HOME/.local/bin/kanata"
 if ! command -v kanata &>/dev/null; then
 	TEMP_KANATA=$(mktemp -d)
 	curl -L https://github.com/jtroo/kanata/releases/latest/download/linux-binaries-x64.zip -o "$TEMP_KANATA/kanata.zip"
 	unzip -o "$TEMP_KANATA/kanata.zip" -d "$TEMP_KANATA"
-	mv "$TEMP_KANATA/kanata_linux_x64" "$HOME/.local/bin/kanata"
-	chmod +x "$HOME/.local/bin/kanata"
+	mv "$TEMP_KANATA/kanata_linux_x64" "$KANATA_TARGET"
+	chmod +x "$KANATA_TARGET"
 	rm -rf "$TEMP_KANATA"
+elif [ "$(command -v kanata)" != "$KANATA_TARGET" ]; then
+	ln -sf "$(command -v kanata)" "$KANATA_TARGET"
 fi
 
 # 3. Espanso (AppImage)

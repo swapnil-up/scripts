@@ -233,6 +233,7 @@ alias k='systemctl --user restart kanata'
 # whisper / piper (TTS/STT utils)
 alias whisper="~/github/scripts/scripts/utils/whisper.sh"
 alias piper="~/github/scripts/scripts/utils/piper.sh"
+alias crawler="~/github/scripts/scripts/python/crawler.py"
 
 #######################################################
 # SPECIAL FUNCTIONS
