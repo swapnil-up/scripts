@@ -45,3 +45,4 @@ export PATH="$HOME/.elan/bin:$PATH"
 
 # Added by Antigravity CLI installer
 export PATH="/home/swap/.local/bin:$PATH"
+export XDG_DATA_DIRS="$HOME/.local/share/flatpak/exports/share:$XDG_DATA_DIRS"
