@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Output a single i3status block showing git sync status of ~/github repos."""
+
+import json
+import subprocess
+import sys
+import os
+import time
+
+GITHUB_DIR = os.path.expanduser("~/github")
+CHECK_INTERVAL = 30  # seconds between full checks
+CACHE_FILE = f"/tmp/gsync-indicator-{os.getuid()}.json"
+
+RED = "#BF616A"
+GREEN = "#A3BE8C"
+YELLOW = "#EBCB8B"
+CYAN = "#88C0D0"
+
+
+def check_repos():
+    result = {"dirty": 0, "behind": 0, "ahead": 0, "total": 0, "errors": 0}
+    for entry in os.listdir(GITHUB_DIR):
+        repo_dir = os.path.join(GITHUB_DIR, entry)
+        git_dir = os.path.join(repo_dir, ".git")
+        if not os.path.isdir(git_dir):
+            continue
+
+        remote_url = (
+            subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                capture_output=True, text=True, cwd=repo_dir, timeout=5
+            ).stdout.strip() or ""
+        )
+        if "github.com" not in remote_url or "/swapnil-up/" not in remote_url:
+            continue
+
+        result["total"] += 1
+
+        branch = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True, text=True, cwd=repo_dir, timeout=5
+        ).stdout.strip()
+
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "-b"],
+            capture_output=True, text=True, cwd=repo_dir, timeout=5
+        ).stdout
+
+        for line in status.splitlines():
+            if line.startswith("##"):
+                if "behind" in line:
+                    result["behind"] += 1
+                if "ahead" in line:
+                    result["ahead"] += 1
+            elif line.strip() and not line.startswith("##"):
+                result["dirty"] += 1
+
+    return result
+
+
+def get_cached_or_fresh():
+    now = time.time()
+    try:
+        with open(CACHE_FILE) as f:
+            data = json.load(f)
+        if now - data.get("ts", 0) < CHECK_INTERVAL:
+            return data.get("result")
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        pass
+
+    try:
+        result = check_repos()
+    except Exception:
+        return None
+
+    with open(CACHE_FILE, "w") as f:
+        json.dump({"ts": now, "result": result}, f)
+    return result
+
+
+def format_block(result):
+    if result["total"] == 0:
+        return {"name": "gsync", "markup": "none", "full_text": "no repos", "color": RED}
+
+    parts = []
+    colors = []
+
+    if result["behind"] > 0:
+        parts.append(f"↓{result['behind']}")
+        colors.append(RED)
+    if result["ahead"] > 0:
+        parts.append(f"↑{result['ahead']}")
+        colors.append(RED)
+    if result["dirty"] > 0:
+        parts.append(f"*{result['dirty']}")
+        colors.append(YELLOW)
+
+    if not parts:
+        color = GREEN
+        text = f"✓{result['total']}"
+    else:
+        color = colors[0] if colors else GREEN
+        text = " ".join(parts)
+
+    return {"name": "gsync", "markup": "none", "full_text": text, "color": color}
+
+
+if __name__ == "__main__":
+    result = get_cached_or_fresh()
+    if result is None:
+        block = {"name": "gsync", "markup": "none", "full_text": "?", "color": RED}
+    else:
+        block = format_block(result)
+    print(json.dumps(block))

@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""i3status wrapper that appends a git-sync indicator block."""
+
+import json
+import os
+import subprocess
+import sys
+
+env = {**os.environ, "I3STATUS_OUTPUT_FORMAT": "i3bar"}
+
+i3status = subprocess.Popen(
+    ["stdbuf", "-oL", "/usr/bin/i3status", "-c", "/home/swap/.config/i3status/config"],
+    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env,
+)
+
+last_gsync = None
+header_done = False
+data_started = False
+
+for line in i3status.stdout:
+    line = line.rstrip("\n")
+
+    if not header_done:
+        header_done = True
+        print(line, flush=True)
+        continue
+
+    if line == "[":
+        print(line, flush=True)
+        continue
+
+    rest = line
+    if line.startswith(","):
+        rest = line[1:]
+
+    try:
+        blocks = json.loads(rest)
+    except json.JSONDecodeError:
+        print(line, flush=True)
+        continue
+
+    gsync = subprocess.run(
+        [sys.executable, "-u", "/home/swap/.local/bin/gsync-indicator"],
+        capture_output=True, text=True, timeout=10,
+    )
+    if gsync.returncode == 0 and gsync.stdout.strip():
+        try:
+            last_gsync = json.loads(gsync.stdout.strip())
+        except json.JSONDecodeError:
+            pass
+
+    if last_gsync:
+        blocks.append(last_gsync)
+
+    prefix = "," if data_started else ""
+    data_started = True
+    print(prefix + json.dumps(blocks), flush=True)
+
+i3status.wait()
