@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+if command -v playerctl &>/dev/null; then
+    PLAYING=$(playerctl status 2>/dev/null)
+    [ "$PLAYING" = "Playing" ] && exit 0
+fi
+
+HOUR=$(date +%H)
+
+if [ "$HOUR" -ge 6 ] && [ "$HOUR" -lt 12 ]; then
+    COLOR="#87CEEB"
+elif [ "$HOUR" -ge 12 ] && [ "$HOUR" -lt 17 ]; then
+    COLOR="#F5DEB3"
+elif [ "$HOUR" -ge 17 ] && [ "$HOUR" -lt 20 ]; then
+    COLOR="#D2691E"
+else
+    COLOR="#1a1a2e"
+fi
+
+exec i3lock -c "$COLOR" "$@"
