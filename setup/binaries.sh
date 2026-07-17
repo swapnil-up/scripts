@@ -93,4 +93,13 @@ else
 	echo "Firefox Developer Edition already exists, skipping."
 fi
 
+# 7. yt-dlp (keep at latest for YouTube playback in mpv)
+YTDLP_TARGET="$HOME/.local/bin/yt-dlp"
+if ! command -v yt-dlp &>/dev/null; then
+	curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$YTDLP_TARGET"
+	chmod +x "$YTDLP_TARGET"
+else
+	yt-dlp -U 2>/dev/null || true
+fi
+
 echo ">>> BINARIES_COMPLETE <<<"
