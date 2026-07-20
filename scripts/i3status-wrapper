@@ -39,15 +39,21 @@ for line in i3status.stdout:
         print(line, flush=True)
         continue
 
-    gsync = subprocess.run(
-        [sys.executable, "-u", "/home/swap/.local/bin/gsync-indicator"],
-        capture_output=True, text=True, timeout=10,
-    )
-    if gsync.returncode == 0 and gsync.stdout.strip():
-        try:
-            last_gsync = json.loads(gsync.stdout.strip())
-        except json.JSONDecodeError:
-            pass
+    try:
+        gsync = subprocess.run(
+            [sys.executable, "-u", "/home/swap/.local/bin/gsync-indicator"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if gsync.returncode == 0 and gsync.stdout.strip():
+            try:
+                last_gsync = json.loads(gsync.stdout.strip())
+            except json.JSONDecodeError:
+                pass
+    except Exception:
+        subprocess.run(
+            ["notify-send", "-u", "low", "gsync-indicator", "timed out, retrying in 30s"],
+            capture_output=True, timeout=3,
+        )
 
     if last_gsync:
         blocks.append(last_gsync)
