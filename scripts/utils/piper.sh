@@ -24,7 +24,10 @@ if [ -z "$TEXT" ]; then
 	exit 1
 fi
 
+# Pre-process: join broken lines from PDFs (single newline -> space), keep paragraph breaks
+TEXT=$(printf '%s' "$TEXT" | awk 'NF { printf "%s%s", (NR>1 ? " " : ""), $0; next } { printf "\n\n" }')
+
 notify-send "Piper TTS" "Reading clipboard..." -i audio-speakers
 
-echo "$TEXT" | piper --model $MODEL_PATH --length_scale $SPEED --output_raw | aplay -r 22050 -f S16_LE -t raw
+printf '%s' "$TEXT" | piper --model $MODEL_PATH --length_scale $SPEED --output_raw | aplay -r 22050 -f S16_LE -t raw
 xclip -selection clipboard -o >/dev/null 2>&1
