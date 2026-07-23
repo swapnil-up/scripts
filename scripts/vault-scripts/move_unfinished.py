@@ -2,8 +2,10 @@
 import json
 from pathlib import Path
 
-SCRIPT_PATH = Path(__file__).resolve()
-VAULT_ROOT = SCRIPT_PATH.parent.parent
+__script = Path(__file__)
+if not __script.is_absolute():
+    __script = Path.cwd() / __script
+VAULT_ROOT = __script.parent.parent
 
 REFLECTIONS = VAULT_ROOT / "Reflections"
 UNFINISHED = VAULT_ROOT / "unfinished"

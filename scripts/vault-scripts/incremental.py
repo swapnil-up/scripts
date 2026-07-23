@@ -4,8 +4,10 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
-SCRIPT_PATH = Path(__file__).resolve()
-VAULT_ROOT = SCRIPT_PATH.parent.parent
+__script = Path(__file__)
+if not __script.is_absolute():
+    __script = Path.cwd() / __script
+VAULT_ROOT = __script.parent.parent
 REFLECTIONS_DIR = VAULT_ROOT / "Reflections"
 UNFINISHED_DIR = VAULT_ROOT / "unfinished"
 TRACKER_FILE = VAULT_ROOT / ".reflections_queue.json"

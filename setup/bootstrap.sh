@@ -35,6 +35,7 @@ SCRIPTS=(
 	"source.sh"     # CMake, Clipmenu (in ~/github)
 	"binaries.sh"   # Starship, Kanata, browsers, appimages
 	"deploy-scripts.sh" # Symlink scripts/ → ~/.local/bin/
+	"vault-scripts-link.sh" # Symlink vault-scripts → obsidian-vault
 	"flatpak.sh"    # Flatpak & Obsidian
 	"fonts.sh"      # Nerd fonts & emojis
 	"piper.sh"      # Piper TTS (downloads model)

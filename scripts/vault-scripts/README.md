@@ -63,24 +63,19 @@ python3 scripts/incremental.py
 python3 scripts/move_unfinished.py
 ```
 
-## Git subtree — tracking scripts elsewhere
+## Symlink setup
 
-These two scripts are tracked in this vault AND in `~/github/scripts` via `git subtree`. The vault's primary branch is `sync`.
+These scripts live in `~/github/scripts/scripts/vault-scripts/` and are symlinked into the vault's `scripts/` directory. The canonical source is this repo — edit here, commit here, push from here.
 
-### Update flow (after changing vault scripts)
+The symlinks are created automatically by `setup/vault-scripts-link.sh` during bootstrap. On a new device, run `setup/bootstrap.sh` or just `setup/vault-scripts-link.sh` directly after both repos are cloned.
 
+To set up manually on a new device:
 ```bash
-# 1. Commit on sync as usual, then regenerate the split branch
-cd ~/github/obsidian-vault
-git checkout sync
-git subtree split --prefix=scripts -b vault-scripts
-
-# 2. Pull into the scripts repo
-cd ~/github/scripts
-git subtree pull --prefix=scripts/vault-scripts obsidian-vault vault-scripts
+mkdir -p ~/github/obsidian-vault/scripts
+for f in incremental.py move_unfinished.py README.md; do
+  ln -s ~/github/scripts/scripts/vault-scripts/"$f" ~/github/obsidian-vault/scripts/"$f"
+done
 ```
-
-The `vault-scripts` branch is a synthetic split — it gets force-replaced each time. Never merge it into `sync`.
 
 ## Design notes
 
