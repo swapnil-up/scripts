@@ -7,7 +7,7 @@
   1 2 3 4 5 6 7 8 9 0 - 
   q w e r t y u i o p
   caps a s d f g h j k l lmet lalt spc ralt rctl
-  x c v n m , . /
+  z x c v n m , . /
 )
 (defvar
   tap-time 150
@@ -88,6 +88,8 @@
   noti3f (tap-hold $tap-time $hold-time ret lctl)
   i3p (multi lmet p)
   i3c (multi lmet c)
+  i3z (multi lmet z)
+  i3x (multi lmet x)
 )
 
 (defalias
@@ -134,19 +136,19 @@
   1 2 3 4 5 6 7 8 9 0 - 
   q w e @r t y @u i o p
   @escctrl a @s @d @f @g h @j @k @l lalt @lmet @spfn @bspcdel @rescctl
-  x c v n m , . /
+  z x c v n m , . /
 )
 
 (deflayer spacefnlayer
   @1    @2    @3    @4    @5    @6    @7    @8    @9    @0    @-
   @i3q  w     @i3e     @i3r  t     home  pgdn  pgup  end   @i3p
   @escctrl a  @s    @i3d  @noti3f @g left down  up    right lalt @lmet spc @bspcdel @rescctl
-  x  @mlc  @mrc  @mlft @mdn  @mup  @mrgt / 
+  @i3z  @i3x  @mlc  @mrc  @mlft @mdn  @mup  @mrgt / 
 )
 
 (deflayer symbollayer
   1 2 3 4 5 6 7 8 9 0 - 
   q w e r t y u i o p
   @escctrl a [ S-9 S-[ + h = - S-/ lalt @lmet spc bspc @rescctl
-  x c v n m , . /
+  z x c v n m , . /
 )
