@@ -230,6 +230,7 @@ alias docker-clean=' \
 # alias for custom scripts
 alias k='systemctl --user restart kanata'
 alias bootstrap='~/github/scripts/setup/bootstrap.sh'
+alias review='python3 ~/github/obsidian-vault/scripts/incremental.py'
 
 # whisper / piper (TTS/STT utils)
 alias whisper="~/github/scripts/scripts/utils/whisper.sh"
