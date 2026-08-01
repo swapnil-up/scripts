@@ -66,6 +66,10 @@ bindsym $mod+d exec --no-startup-id ~/github/scripts/scripts/rofi/rofi-smart-lau
 bindsym $mod+g exec --no-startup-id ~/github/scripts/scripts/rofi/fastfind-rofi.sh
 bindsym $mod+Tab exec --no-startup-id rofi -show window
 
+# Nepali transliteration cheatsheet (searchable rofi popup).
+# Toggle Nepali on/off globally with Super+Shift+Space (ibus)
+bindsym $mod+Shift+s exec --no-startup-id ~/github/scripts/scripts/nepali/nepali-cheatsheet.sh
+
 # change focus
 bindsym $mod+h focus left
 bindsym $mod+j focus down

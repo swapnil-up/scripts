@@ -14,7 +14,7 @@ mkdir -p "$TARGET_DIR"
 for entry in "$SCRIPTS_SRC"/*; do
 	name=$(basename "$entry")
 	case "$name" in
-		AGENTS.md|README.md|anki|editor|espanso|python|rofi|snippets|template|utils|vault-scripts)
+		AGENTS.md|README.md|anki|editor|espanso|python|rofi|snippets|template|utils|vault-scripts|nepali)
 			continue
 			;;
 	esac

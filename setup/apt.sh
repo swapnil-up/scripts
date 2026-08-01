@@ -20,6 +20,7 @@ APPS=(
 	"libxcursor-dev" "libxinerama-dev" "libxkbcommon-dev"
 	"libxcb-xinerama0" "libxcb-cursor0" "libnss3" "zstd" "libfuse2"
 	"xsel" "xclip" "libextutils-pkgconfig-perl"
+	"postgresql" "postgresql-contrib" "postgresql-16-pgvector"
 )
 
 for app in "${APPS[@]}"; do

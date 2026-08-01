@@ -28,6 +28,7 @@ sudo rm -f /etc/apt/trusted.gpg.d/llvm-18.gpg | tee -a "$LOG_FILE"
 SCRIPTS=(
 	"repos.sh"      # External repositories
 	"apt.sh"        # Main package installation
+	"nepali.sh"     # Nepali typing (ibus-m17n + engine + toggle)
 	"system.sh"     # udev, groups, etc.
 	"languages.sh"  # Pyenv, NVM, Rust
 	"kmp.sh"        # JDK 21, Android SDK, udev rules for KMP
