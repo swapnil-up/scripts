@@ -64,8 +64,15 @@ Sh / shh → ष
 s → स
 h → ह
 ksh → क्ष
-x / ks → क्स
+x / ks → क्स   (halant stays visible; for क्ष use ksh)
 gyn → ज्ञ
+——— conjuncts ———
+ksh → क्ष   (not "ks")
+shr → श्र   (shra)
+gyn → ज्ञ
+tra → त्र
+pra → प्र
+sta → स्त
 ——— specials ———
 M / N → ं  (anusvara; nM → नं)
 H → ः      (visarga; dH → दः)

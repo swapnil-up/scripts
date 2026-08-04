@@ -9,6 +9,20 @@ A consonant followed directly by another consonant gets a halant automatically:
 `kk` → क्क, `nma` → न्म. If it merges two sounds you don't want, press `Backspace` to
 step back one transliteration unit.
 
+## Common conjuncts (type the code on the left)
+
+| Intended | Type | Result |
+|---|---|---|
+| क्ष | `ksh` | क्ष |
+| श्र | `shr` | श्र |
+| ज्ञ | `gyn` | ज्ञ |
+| त्र | `tra` | त्र |
+| प्र | `pra` | प्र |
+| स्त | `sta` | स्त |
+
+Gotchas: `ks` → क्स (ka+virama+sa, halant stays visible) — for the क्ष glyph use
+`ksh`, not `ks`. There is no `shra`/`shrya` key; `shr` covers श्र.
+
 ## Vowels (independent)
 
 | Latin | Devanagari | Latin | Devanagari |
