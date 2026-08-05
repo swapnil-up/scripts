@@ -387,6 +387,9 @@ exec_always --no-startup-id conky -c ~/.config/conky/conky_quotes.conf
 # Or individual bindings:
 # bindsym $mod+t exec --no-startup-id ~/github/scripts/scripts/rofi-todo-add.sh
 # bindsym $mod+shift+t exec --no-startup-id ~/github/scripts/scripts/rofi-todo-toggle.sh
+
+# Timer: set / view / cancel countdowns
+bindsym $mod+shift+t exec --no-startup-id ~/github/scripts/scripts/rofi/rofi-timer-menu.sh
 # bindsym $mod+ctrl+t exec --no-startup-id ~/github/scripts/scripts/rofi-todo-remove.sh
 
 # Open VS Code

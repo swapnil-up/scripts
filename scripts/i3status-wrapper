@@ -5,13 +5,39 @@ import json
 import os
 import subprocess
 import sys
+import threading
 
+home = os.path.expanduser("~")
 env = {**os.environ, "I3STATUS_OUTPUT_FORMAT": "i3bar"}
 
 i3status = subprocess.Popen(
-    ["stdbuf", "-oL", "/usr/bin/i3status", "-c", "/home/swap/.config/i3status/config"],
-    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env,
+    ["stdbuf", "-oL", "/usr/bin/i3status", "-c", f"{home}/.config/i3status/config"],
+    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    text=True, env=env,
 )
+
+TIMER_MENU = f"{home}/github/scripts/scripts/rofi/rofi-timer-menu.sh"
+
+
+def click_listener():
+    """Read i3bar click events from stdin; open timer menu on timer block click."""
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            evt = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if evt.get("name") == "timer" and evt.get("button") == 1:
+            subprocess.Popen(
+                ["bash", TIMER_MENU],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+
+threading.Thread(target=click_listener, daemon=True).start()
 
 last_gsync = None
 header_done = False
@@ -22,7 +48,7 @@ for line in i3status.stdout:
 
     if not header_done:
         header_done = True
-        print(line, flush=True)
+        print('{"version":1,"click_events":true}', flush=True)
         continue
 
     if line == "[":
@@ -41,7 +67,7 @@ for line in i3status.stdout:
 
     try:
         gsync = subprocess.run(
-            [sys.executable, "-u", "/home/swap/.local/bin/gsync-indicator"],
+            [sys.executable, "-u", f"{home}/.local/bin/gsync-indicator"],
             capture_output=True, text=True, timeout=10,
         )
         if gsync.returncode == 0 and gsync.stdout.strip():
@@ -54,6 +80,19 @@ for line in i3status.stdout:
             ["notify-send", "-u", "low", "gsync-indicator", "timed out, retrying in 30s"],
             capture_output=True, timeout=3,
         )
+
+    try:
+        timer = subprocess.run(
+            [sys.executable, "-u", f"{home}/.local/bin/timer-indicator"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if timer.returncode == 0 and timer.stdout.strip():
+            try:
+                blocks.append(json.loads(timer.stdout.strip()))
+            except json.JSONDecodeError:
+                pass
+    except Exception:
+        pass
 
     if last_gsync:
         blocks.append(last_gsync)

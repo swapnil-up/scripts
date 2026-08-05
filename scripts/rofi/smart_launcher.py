@@ -89,6 +89,7 @@ def build_candidates():
         ",tt          toggle todo",
         ",t",
         ",tr          remove todo",
+        ",timer       set / cancel countdown",
         # ",p",
         ",n",
         ",til",
@@ -204,6 +205,11 @@ def handle_command(base, sub, rest):
             subprocess.run(
                 [home / "github/scripts/scripts/rofi/rofi-obsidian.sh", base]
             )
+
+    elif base == "timer":
+        subprocess.run(
+            [home / "github/scripts/scripts/rofi/rofi-timer-menu.sh"]
+        )
 
     elif base == "mf":
         log_annoying()

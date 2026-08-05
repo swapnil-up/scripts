@@ -1,0 +1,12 @@
+[Unit]
+Description=Timer daemon (countdown timers + i3bar indicator)
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/timer-daemon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

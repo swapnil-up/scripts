@@ -17,4 +17,17 @@ else
 	echo "  [WARN] kanata binary not found, skipping service"
 fi
 
+# Timer daemon
+if [ -f "$HOME/.local/bin/timer-daemon" ]; then
+	if [ -f "$HOME/.config/systemd/user/timer-daemon.service" ]; then
+		systemctl --user daemon-reload
+		systemctl --user enable timer-daemon
+		systemctl --user start timer-daemon
+	else
+		echo "  [WARN] timer-daemon.service not found — stow may not have run yet"
+	fi
+else
+	echo "  [WARN] timer-daemon not linked — deploy-scripts may not have run yet"
+fi
+
 echo ">>> SERVICES_COMPLETE <<<"

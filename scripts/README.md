@@ -10,7 +10,7 @@ Utilities and automation.
 | `editor/` | Video editing: cut_marker, text_marker, gif (see editor/README.md) |
 | `espanso/` | Calculator, case picker, shell helpers |
 | `obsidian/` | Incremental笔记, move unfinished |
-| `rofi/` | Smart launcher, todo menu, projects |
+| `rofi/` | Smart launcher, todo menu, timer menu |
 | `snippets/` | FastAPI, React, JS templates |
 | `utils/` | piper (TTS), whisper (STT), countdown |
 | `template/` | TIL, why, obsidian templates |

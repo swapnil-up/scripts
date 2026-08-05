@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""Timer daemon: multiple countdown timers with unix-socket IPC.
+
+Usage:
+  timer-daemon                  Run the server (blocks, meant for systemd)
+  timer-daemon start SECS [LABEL]
+  timer-daemon stop ID
+  timer-daemon list
+  timer-daemon ping
+
+Client mode connects to the socket and prints a JSON response. The server
+rings (paplay + dunstify) when a timer expires and persists state across
+restarts in $XDG_STATE_HOME/timer-daemon.json.
+"""
+
+import json
+import os
+import socket
+import subprocess
+import sys
+import threading
+import time
+
+SOCKET_NAME = "timer-daemon.sock"
+RING_SOUND = os.path.expanduser("~/.local/share/sounds/timer-ring.wav")
+RING_SOURCE = "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
+RING_PLAYS = int(os.environ.get("TIMER_RING_PLAYS", "1"))
+RING_GAP = 0.4
+
+
+def ensure_ring_sound():
+    """Trim a short ring from the system sound if our copy is missing."""
+    if os.path.exists(RING_SOUND):
+        return
+    if not os.path.exists(RING_SOURCE):
+        return
+    os.makedirs(os.path.dirname(RING_SOUND), exist_ok=True)
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-t", "1.2", "-i", RING_SOURCE,
+         "-acodec", "pcm_s16le", RING_SOUND],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    if not os.path.exists(RING_SOUND):
+        print(f"warning: could not create {RING_SOUND}, falling back to source",
+              file=sys.stderr)
+
+_lock = threading.Lock()
+timers = {}  # id -> {"label", "end_time", "duration"}
+next_id = 1
+
+
+def socket_path():
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime:
+        return os.path.join(runtime, SOCKET_NAME)
+    return f"/tmp/{SOCKET_NAME}-{os.getuid()}"
+
+
+def state_file():
+    base = os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))
+    return os.path.join(base, "timer-daemon.json")
+
+
+def load_state():
+    global next_id
+    try:
+        with open(state_file()) as f:
+            data = json.load(f)
+        now = time.time()
+        for t in data.get("timers", []):
+            if t["end_time"] > now:
+                timers[t["id"]] = t
+                next_id = max(next_id, t["id"] + 1)
+    except (OSError, ValueError):
+        pass
+
+
+def save_state():
+    try:
+        os.makedirs(os.path.dirname(state_file()), exist_ok=True)
+        with _lock:
+            data = {"timers": list(timers.values())}
+        with open(state_file(), "w") as f:
+            json.dump(data, f)
+    except OSError:
+        pass
+
+
+def ring(t):
+    label = t["label"] or "Timer"
+    subprocess.run(["dunstify", "-u", "critical", "-t", "0", "Timer done", label])
+    sound = RING_SOUND if os.path.exists(RING_SOUND) else RING_SOURCE
+    if not os.path.exists(sound):
+        return
+    for _ in range(RING_PLAYS):
+        subprocess.run(["paplay", sound])
+        time.sleep(RING_GAP)
+
+
+def expire_loop():
+    while True:
+        now = time.time()
+        due = []
+        with _lock:
+            for tid, t in list(timers.items()):
+                if now >= t["end_time"]:
+                    due.append((tid, t))
+            for tid, _ in due:
+                del timers[tid]
+        for _, t in due:
+            threading.Thread(target=ring, args=(t,), daemon=True).start()
+            save_state()
+        time.sleep(0.5)
+
+
+def handle(cmd):
+    global next_id
+    op = cmd.get("cmd")
+    if op == "ping":
+        return {"ok": True}
+    if op == "start":
+        try:
+            secs = int(cmd.get("secs", 0))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "invalid seconds"}
+        if secs <= 0:
+            return {"ok": False, "error": "seconds must be > 0"}
+        with _lock:
+            tid = next_id
+            next_id += 1
+            timers[tid] = {
+                "id": tid,
+                "label": cmd.get("label", ""),
+                "end_time": time.time() + secs,
+                "duration": secs,
+            }
+        save_state()
+        return {"ok": True, "id": tid}
+    if op == "stop":
+        try:
+            tid = int(cmd.get("id", -1))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "invalid id"}
+        with _lock:
+            timers.pop(tid, None)
+        save_state()
+        return {"ok": True}
+    if op == "list":
+        now = time.time()
+        with _lock:
+            return {
+                "timers": [
+                    {
+                        "id": tid,
+                        "label": t["label"],
+                        "remaining": max(0, int(t["end_time"] - now)),
+                        "duration": t["duration"],
+                    }
+                    for tid, t in sorted(timers.items())
+                ]
+            }
+    return {"ok": False, "error": f"unknown command: {op}"}
+
+
+def run_server():
+    ensure_ring_sound()
+    load_state()
+    path = socket_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(path)
+    srv.listen(8)
+    srv.settimeout(1)
+    threading.Thread(target=expire_loop, daemon=True).start()
+    while True:
+        try:
+            conn, _ = srv.accept()
+        except socket.timeout:
+            continue
+        try:
+            data = conn.recv(65536)
+            cmd = json.loads(data.decode())
+            resp = handle(cmd)
+            conn.sendall((json.dumps(resp) + "\n").encode())
+        except Exception:
+            pass
+        finally:
+            conn.close()
+
+
+def start_daemon():
+    try:
+        subprocess.run(
+            ["systemctl", "--user", "start", "timer-daemon"],
+            capture_output=True,
+            timeout=5,
+        )
+        return True
+    except Exception:
+        pass
+    subprocess.Popen(
+        [sys.executable, os.path.abspath(__file__)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    return True
+
+
+def client(args):
+    try:
+        return _client(args)
+    except (ConnectionRefusedError, FileNotFoundError):
+        start_daemon()
+        time.sleep(0.2)
+        return _client(args)
+
+
+def _client(args):
+    cmd = {"cmd": args[0] if args else "ping"}
+    if args and args[0] == "start":
+        secs = int(args[1])
+        label = " ".join(args[2:])
+        cmd = {"cmd": "start", "secs": secs, "label": label}
+    elif args and args[0] == "stop":
+        cmd = {"cmd": "stop", "id": int(args[1])}
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.connect(socket_path())
+    s.sendall((json.dumps(cmd) + "\n").encode())
+    buf = b""
+    while True:
+        chunk = s.recv(65536)
+        if not chunk:
+            break
+        buf += chunk
+    s.close()
+    print(buf.decode().strip())
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] != "server":
+        client(sys.argv[1:])
+    else:
+        run_server()
+
+
+if __name__ == "__main__":
+    main()

@@ -19,6 +19,7 @@ Dotfiles managed with git-stow. Each subdirectory is a stow package. Usually aut
 | `conky/` | System info |
 | `picom/` | Compositor |
 | `i3status/` | Status bar |
+| `timer/` | Timer daemon (systemd user unit) |
 
 ## Stow Usage
 
