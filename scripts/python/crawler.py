@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import json
 import sqlite3
 import time
 import subprocess
@@ -14,6 +15,133 @@ BASE_DIR = os.path.expanduser("~/github/knowledge")
 os.makedirs(BASE_DIR, exist_ok=True)
 DB_PATH = os.path.join(BASE_DIR, "novels_digest.db")
 USER_DATA_DIR = os.path.join(BASE_DIR, ".browser_profile")
+CHROMIUM_DATA_DIR = os.path.join(BASE_DIR, ".browser_profile_chromium")
+SESSION_PATH = os.path.join(BASE_DIR, "session.json")
+# Exact Chrome-for-Testing binary that agent-tools/get-session uses, so the
+# browser fingerprint that earns cf_clearance matches the replay browser.
+PUPPETEER_CHROME = os.path.expanduser(
+    "~/.cache/puppeteer/chrome/linux-151.0.7922.47/chrome-linux64/chrome")
+
+
+def load_session(path=SESSION_PATH):
+    """Loads UA + cookies saved by agent-tools' get-session (Cloudflare bypass).
+
+    Returns (user_agent, cookies) or (None, None)."""
+    if not os.path.exists(path):
+        return None, None
+    try:
+        with open(path, encoding="utf-8") as f:
+            s = json.load(f)
+        ua = s.get("ua")
+        cookies = [c for c in (s.get("cookies") or []) if c.get("name")]
+        return ua, cookies
+    except Exception as e:
+        print(f"[Session] Failed to load {path}: {e}")
+        return None, None
+
+
+def launch_cloudflare_browser(p, headless=False):
+    """Launches a headed Chrome (puppeteer's exact binary) on the user's display.
+
+    Headed is required: Cloudflare's clearance is bound to the browser
+    fingerprint, and a headless instance gets re-challenged. The crawler opens
+    ONE visible window for the whole crawl; the user solves the challenge once
+    in it, and the browser keeps its own valid cf_clearance for all chapters.
+Returns (browser, context, page)."""
+    launch_opts = {
+        "headless": headless,
+        "args": [
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-blink-features=AutomationControlled",
+            "--start-maximized",
+        ],
+    }
+    if os.path.exists(PUPPETEER_CHROME):
+        launch_opts["executable_path"] = PUPPETEER_CHROME
+    browser = p.chromium.launch(**launch_opts)
+    context = browser.new_context(
+        user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+        viewport={"width": 1366, "height": 900},
+    )
+    # NOTE: we deliberately do NOT pre-inject an old cf_clearance cookie here.
+    # A clearance earned by a different browser instance has a mismatched
+    # fingerprint and makes Cloudflare loop on an interactive challenge. The
+    # user solves fresh in THIS window once, and it stays clear for the crawl.
+    page = context.new_page()
+    page.set_default_timeout(15000)
+    return browser, context, page
+
+
+def is_challenged(page):
+    """True if Cloudflare is showing its interstitial."""
+    try:
+        if "Just a moment" in (page.title() or ""):
+            return True
+        url = page.url
+        return "challenge" in url.lower() and "freewebnovel" not in url.lower()
+    except Exception:
+        return False
+
+
+def wait_for_challenge_clear(page, selector, timeout=120):
+    """Polls quietly while a human solves a Cloudflare challenge in the open
+    browser window. Crucially: does NOT reload (reloading interrupts the user's
+    click and causes the infinite-verify loop). Returns True once content shows."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            if page.locator(selector).first.count() > 0:
+                return True
+        except Exception:
+            return False
+        if not is_challenged(page):
+            return page.locator(selector).first.count() > 0
+        time.sleep(2)
+    return page.locator(selector).first.count() > 0
+
+
+def fetch_chapter_content(page, url, selector, total_budget=1800):
+    """Navigates to url and waits for the content selector, tolerating both
+    navigation timeouts and Cloudflare challenges.
+
+    - Challenges: waits quietly (no reload, so the user can click without
+      interruption) for up to `total_budget` seconds, re-navigating until the
+      content shows.
+    - Non-challenge misses (e.g. we landed on the novel index / end page):
+      fast-fail after a few retries so an idempotent re-run of a completed
+      book ends quickly instead of hanging.
+
+    Returns True on success."""
+    deadline = time.time() + total_budget
+    miss_count = 0
+    while time.time() < deadline:
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=25000)
+        except (Exception, PlaywrightTimeoutError):
+            pass  # page may still have rendered; fall through to the selector check
+
+        try:
+            page.wait_for_selector(selector, timeout=15000)
+            return True
+        except Exception:
+            pass
+
+        if is_challenged(page):
+            print("  [Cloudflare] A new challenge appeared. "
+                  "SOLVE IT IN THE BROWSER WINDOW (check box / click verify).", flush=True)
+            if wait_for_challenge_clear(page, selector):
+                print("  [Cloudflare] Cleared. Resuming crawl.", flush=True)
+                return True
+            continue  # not cleared yet; loop re-navigates and waits again
+
+        miss_count += 1
+        print(f"  [Warning] No '{selector}' content on this page ({page.title()!r}); "
+              f"{3 - miss_count} more retries.", flush=True)
+        if miss_count >= 3:
+            return False
+        time.sleep(5)
+    return False
 
 def init_db():
     """Initializes the database for multi-chapter books."""
@@ -258,16 +386,8 @@ def scrape_incremental(book_id, start_url, selector, next_selector=None, target_
         return 0
 
     with sync_playwright() as p:
-        # Use a persistent context to save cookies/session
-        os.makedirs(USER_DATA_DIR, exist_ok=True)
-        context = p.firefox.launch_persistent_context(
-            USER_DATA_DIR,
-            headless=True,
-            user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
-            viewport={'width': 1280, 'height': 800}
-        )
-        page = context.new_page()
-        page.set_default_timeout(15000)
+        # Reuse the Cloudflare session captured by agent-tools' get-session
+        browser, context, page = launch_cloudflare_browser(p)
 
         # Smart Start: Check if start_url is already in DB. If so, find the REAL start.
         with sqlite3.connect(DB_PATH) as conn:
@@ -277,6 +397,11 @@ def scrape_incremental(book_id, start_url, selector, next_selector=None, target_
                     # RoyalRoad often needs more time for CF checks or just layout
                     page.goto(current_url, wait_until="domcontentloaded", timeout=20000)
                     handle_ao3_gate(page)
+
+                    # If Cloudflare challenges, wait for a human solve in the window
+                    if is_challenged(page):
+                        print("  [Cloudflare] Challenge on start page. SOLVE IT IN THE BROWSER WINDOW. Waiting...")
+                        wait_for_challenge_clear(page, "#article", timeout=300)
                     
                     # Try to find next link
                     next_url = get_next_url(page, current_url, next_selector)
@@ -322,43 +447,24 @@ def scrape_incremental(book_id, start_url, selector, next_selector=None, target_
             with sqlite3.connect(DB_PATH) as conn:
                 if conn.execute("SELECT 1 FROM chapters WHERE url = ?", (current_url,)).fetchone():
                     print(f"Chapter already in DB: {current_url}. Skipping...")
-                    try:
-                        page.goto(current_url, wait_until="domcontentloaded", timeout=15000)
-                        handle_ao3_gate(page)
+                    # Navigate robustly (tolerates Cloudflare) so we can find the NEXT link
+                    if fetch_chapter_content(page, current_url, selector, total_budget=240):
                         current_url = get_next_url(page, current_url, next_selector)
-                        continue
-                    except:
+                    else:
+                        print(f"  [Info] Could not load already-saved chapter {current_url}. Stopping.")
                         break
+                    continue
 
             print(f"[{current_total + 1}/{target_chapter if target_chapter else '?'}] Fetching: {current_url}")
             try:
-                # Retry logic for page navigation
-                max_retries = 2
-                for attempt in range(max_retries):
-                    try:
-                        page.goto(current_url, wait_until="domcontentloaded", timeout=15000)
-                        break
-                    except (Exception, PlaywrightTimeoutError) as e:
-                        if attempt < max_retries - 1:
-                            print(f"  [Warning] Navigation timeout, retrying ({attempt + 1}/{max_retries})...")
-                            time.sleep(2)
-                        else:
-                            print(f"  [Warning] Final timeout on {current_url}, checking if content is visible anyway...")
-                            break
-
                 handle_ao3_gate(page)
-                
-                # Check for content selector
-                try:
-                    page.wait_for_selector(selector, timeout=10000)
-                except Exception:
-                    if handle_ao3_gate(page):
-                        page.wait_for_selector(selector, timeout=10000)
-                    else:
-                        print(f"  [Error] Content selector '{selector}' not found.")
-                        save_diagnostic(page, "fetch_failure")
-                        raise Exception(f"Content selector not found.")
-                
+
+                # Robust navigation + Cloudflare-tolerating content fetch
+                if not fetch_chapter_content(page, current_url, selector):
+                    print(f"  [Error] Could not load '{selector}' from {current_url}.")
+                    save_diagnostic(page, "fetch_failure")
+                    raise Exception("Content selector not found after retries.")
+
                 page_title = page.title()
                 raw_content = page.locator(selector).first.inner_html()
                 pristine_html = clean_html_content(raw_content)
@@ -378,14 +484,18 @@ def scrape_incremental(book_id, start_url, selector, next_selector=None, target_
 
                 max_order += 1
                 with sqlite3.connect(DB_PATH) as conn:
-                    conn.execute(
-                        "INSERT INTO chapters (book_id, url, title, html_content, chapter_order) VALUES (?, ?, ?, ?, ?)",
+                    cur = conn.execute(
+                        "INSERT OR IGNORE INTO chapters (book_id, url, title, html_content, chapter_order) VALUES (?, ?, ?, ?, ?)",
                         (book_id, current_url, page_title, pristine_html, max_order)
                     )
-                
-                new_chapters_count += 1
-                current_total += 1
-                
+                    inserted = cur.rowcount > 0
+
+                if inserted:
+                    new_chapters_count += 1
+                    current_total += 1
+                else:
+                    print(f"  [Idempotent] {current_url} already stored; ignoring duplicate.")
+
                 # Find the NEXT url
                 next_url = get_next_url(page, current_url, next_selector)
                 if not next_url:
@@ -398,13 +508,13 @@ def scrape_incremental(book_id, start_url, selector, next_selector=None, target_
                     print(f"  [Info] No Next Link found. Reached end of content.")
                     current_url = None
                     
-                time.sleep(1) # Modest pacing
+                time.sleep(2) # Modest pacing (helps avoid Cloudflare rate-limit)
                 
             except Exception as e:
                 print(f"Error parsing {current_url}: {e}")
                 break
         
-        context.close()
+        browser.close()
     return new_chapters_count
 
 def compile_epub(book_id, book_title):
@@ -496,10 +606,10 @@ def main():
                 print("  Testing selector on the new URL...")
                 try:
                     with sync_playwright() as p:
-                        ctx = p.firefox.launch_persistent_context(
-                            USER_DATA_DIR,
+                        ctx = p.chromium.launch_persistent_context(
+                            CHROMIUM_DATA_DIR,
                             headless=True,
-                            user_agent="Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
+                            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
                             viewport={'width': 1280, 'height': 800}
                         )
                         page = ctx.new_page()
@@ -528,11 +638,15 @@ def main():
                 next_selector = next_input
         
         with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.execute(
-                "INSERT INTO books (title, start_url, selector, next_selector) VALUES (?, ?, ?, ?)",
+            # Idempotent: re-adding an existing title reuses/updates the row
+            # instead of crashing on the UNIQUE(title) constraint.
+            conn.execute(
+                "INSERT INTO books (title, start_url, selector, next_selector) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(title) DO UPDATE SET "
+                "start_url=excluded.start_url, selector=excluded.selector, next_selector=excluded.next_selector",
                 (book_title, start_url, selector, next_selector)
             )
-            book_id = cursor.lastrowid
+            book_id = conn.execute("SELECT id FROM books WHERE title = ?", (book_title,)).fetchone()[0]
     else:
         # For existing books, find the last URL to resume
         with sqlite3.connect(DB_PATH) as conn:
