@@ -20,6 +20,7 @@ order += "disk /"
 order += "load"
 order += "memory"
 order += "tztime local"
+order += "tztime melbourne"
 
 wireless _first_ {
         format_up = "W:(%quality at %essid) %ip"
@@ -51,4 +52,9 @@ memory {
 
 tztime local {
         format = "%Y-%m-%d %H:%M:%S"
+}
+
+tztime melbourne {
+        format = "MEL %H:%M"
+        timezone = "Australia/Melbourne"
 }

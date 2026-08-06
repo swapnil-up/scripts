@@ -65,6 +65,10 @@ for line in i3status.stdout:
         print(line, flush=True)
         continue
 
+    for block in blocks:
+        if block.get("name") == "tztime" and block.get("instance") == "melbourne":
+            block["color"] = "#FFA500"
+
     try:
         gsync = subprocess.run(
             [sys.executable, "-u", f"{home}/.local/bin/gsync-indicator"],
