@@ -7,7 +7,7 @@ Utilities and automation.
 | Category | Description |
 |----------|-------------|
 | `anki/` | Piper integration, reviewer workflow, game cards |
-| `editor/` | Video editing: cut_marker, text_marker, gif (see editor/README.md) |
+| `editor/` | Video: records, trims, captions, auto-pipeline, YouTube upload (see editor/README.md) |
 | `espanso/` | Calculator, case picker, shell helpers |
 | `obsidian/` | Incremental笔记, move unfinished |
 | `rofi/` | Smart launcher, todo menu, timer menu |

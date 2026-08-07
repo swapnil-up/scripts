@@ -2,7 +2,7 @@
 import sys
 import json
 import os
-from utils import run_ffmpeg, validate_file, format_time
+from utils import run_ffmpeg, validate_file, format_time, texts_path
 
 
 def process_text_overlays(input_file, output_file):
@@ -11,7 +11,7 @@ def process_text_overlays(input_file, output_file):
     """
     validate_file(input_file)
 
-    texts_file = f"{input_file}.texts.json"
+    texts_file = texts_path(input_file)
     if not os.path.exists(texts_file):
         print(f"Error: No text overlays file found ({texts_file})")
         print("Run text_marker.py first to create text overlays")
@@ -83,10 +83,21 @@ def process_text_overlays(input_file, output_file):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Usage: process_text.py INPUT OUTPUT")
+    from parser import parse
+
+    ns = parse(sys.argv[1:], doc=None)
+    if len(ns.positionals) < 1:
+        print("Usage: process_text.py INPUT [OUTPUT]")
         print("Example: process_text.py edited.mp4 with_text.mp4")
         print("\nApplies all text overlays from text_marker.py")
         sys.exit(1)
 
-    process_text_overlays(sys.argv[1], sys.argv[2])
+    input_file = ns.positionals[0]
+    output_file = ns.output
+    if len(ns.positionals) > 1:
+        output_file = ns.positionals[1]
+    if output_file is None:
+        from utils import auto_output_path
+        output_file = auto_output_path(input_file, "text")
+
+    process_text_overlays(input_file, output_file)

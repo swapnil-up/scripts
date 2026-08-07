@@ -20,6 +20,7 @@ System bootstrap scripts. Runs on fresh Debian/Ubuntu.
 | `stow.sh` | Dotfile symlinks |
 | `piper.sh` | Piper TTS (downloads voice model) |
 | `whisper.sh` | Whisper.cpp speech-to-text (builds from source) |
+| `youtube-upload.sh` | youtubeuploader binary + YouTube OAuth for vedit uploads |
 | `services.sh` | Enable user services (kanata, etc.) |
 
 ## Flow

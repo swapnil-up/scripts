@@ -11,13 +11,12 @@ Usage:
 import sys
 import os
 import glob
-import tempfile
-from utils import run_ffmpeg, validate_file, get_video_info, parse_time, get_vedit_dir
+from utils import run_ffmpeg, validate_file, get_video_info, parse_time, raw_dir, temp_path
 
 
 def latest_screen_recording():
-    """Find the most recent screen recording in ~/vedit/."""
-    pattern = os.path.join(get_vedit_dir(), "screen_*.mp4")
+    """Find the most recent screen recording in ~/vedit/raw/."""
+    pattern = os.path.join(raw_dir(), "screen_*.mp4")
     files = sorted(glob.glob(pattern))
     return files[-1] if files else None
 
@@ -71,7 +70,7 @@ def create_gif(
     filters.append(f"fps={settings['fps']}")
     filter_str = ",".join(filters) if filters else None
 
-    palette_file = tempfile.mktemp(suffix=".png")
+    palette_file = temp_path(".png")
 
     try:
         label = quality.upper() if quality != "demo" else "DEMO"
@@ -135,49 +134,26 @@ def create_gif(
 
 
 if __name__ == "__main__":
-    input_file = None
-    output_file = None
-    start = None
-    duration = None
-    fps = None
-    width = None
-    quality = "medium"
-    use_latest = False
+    from parser import parse
 
-    i = 1
-    while i < len(sys.argv):
-        arg = sys.argv[i]
-        if arg == "--latest":
-            use_latest = True
-            i += 1
-        elif arg == "--start" and i + 1 < len(sys.argv):
-            start = sys.argv[i + 1]
-            i += 2
-        elif arg == "--duration" and i + 1 < len(sys.argv):
-            duration = sys.argv[i + 1]
-            i += 2
-        elif arg == "--fps" and i + 1 < len(sys.argv):
-            fps = int(sys.argv[i + 1])
-            i += 2
-        elif arg == "--width" and i + 1 < len(sys.argv):
-            width = int(sys.argv[i + 1])
-            i += 2
-        elif arg == "--quality" and i + 1 < len(sys.argv):
-            quality = sys.argv[i + 1]
-            i += 2
-        elif arg.startswith("--"):
-            print(f"  Unknown option: {arg}")
-            sys.exit(1)
-        elif input_file is None:
-            input_file = arg
-            i += 1
-        elif output_file is None:
-            output_file = arg
-            i += 1
-        else:
-            i += 1
+    ns = parse(
+        sys.argv[1:],
+        flags=("--latest",),
+        options={
+            "--start": str,
+            "--duration": str,
+            "--fps": int,
+            "--width": int,
+            "--quality": str,
+        },
+        doc=__doc__,
+    )
 
-    if use_latest:
+    file_args = list(ns.positionals)
+    input_file = file_args[0] if file_args else None
+    output_file = ns.output or (file_args[1] if len(file_args) > 1 else None)
+
+    if "--latest" in ns.values:
         found = latest_screen_recording()
         if not found:
             print("  No screen recordings found in ~/vedit/.")
@@ -203,4 +179,12 @@ if __name__ == "__main__":
         print("  gif.py --latest demo.gif --demo")
         sys.exit(1)
 
-    create_gif(input_file, output_file, start, duration, fps, width, quality)
+    create_gif(
+        input_file,
+        output_file,
+        ns.values.get("--start"),
+        ns.values.get("--duration"),
+        ns.values.get("--fps"),
+        ns.values.get("--width"),
+        ns.values.get("--quality", "medium"),
+    )

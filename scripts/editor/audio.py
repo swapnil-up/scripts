@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Control audio on a video: mute, adjust volume, replace, or mix in a track.
+Control audio on a video: mute, adjust volume, normalize, replace, or mix.
 
 Usage:
     audio.py input.mp4 output.mp4 --mute                  # remove audio
-    audio.py input.mp4 output.mp4 --volume 0.5             # lower to 50%
-    audio.py input.mp4 output.mp4 --add music.mp3          # replace audio
-    audio.py input.mp4 output.mp4 --add music.mp3 --mix    # mix with existing
+    audio.py input.mp4 output.mp4 --volume 0.5            # lower to 50%
+    audio.py input.mp4 output.mp4 --normalize             # loudness + compressor
+    audio.py input.mp4 output.mp4 --add music.mp3         # replace audio
+    audio.py input.mp4 output.mp4 --add music.mp3 --mix   # mix with existing
     audio.py input.mp4 output.mp4 --add music.mp3 --mix --volume 0.3  # existing at 30%
 """
 
@@ -15,7 +16,7 @@ import os
 from utils import run_ffmpeg, validate_file
 
 
-def process_audio(video_file, output_file, mute=False, volume=None, add_audio=None, mix=False):
+def process_audio(video_file, output_file, mute=False, volume=None, add_audio=None, mix=False, normalize=False):
     validate_file(video_file)
     if add_audio:
         validate_file(add_audio)
@@ -25,6 +26,18 @@ def process_audio(video_file, output_file, mute=False, volume=None, add_audio=No
     if mute:
         cmd.extend(["-c:v", "copy", "-an", output_file])
         print("  Removing all audio tracks.")
+        run_ffmpeg(cmd)
+        print(f"\n  ✓ Output: {output_file}")
+        return
+
+    if normalize:
+        # Safe loudness -> speech-friendly compression chain.
+        af = (
+            "loudnorm=I=-16:TP=-1.5:LRA=11,"
+            "acompressor=threshold=-18dB:ratio=3:attack=5:release=100"
+        )
+        cmd.extend(["-c:v", "copy", "-af", af, output_file])
+        print("  Normalizing (loudnorm -16 LUFS) + compressing peaks.")
         run_ffmpeg(cmd)
         print(f"\n  ✓ Output: {output_file}")
         return
@@ -72,42 +85,25 @@ def process_audio(video_file, output_file, mute=False, volume=None, add_audio=No
 
 
 if __name__ == "__main__":
-    input_file = None
-    output_file = None
-    mute = False
-    volume = None
-    add_audio = None
-    mix = False
+    from parser import parse
 
-    i = 1
-    while i < len(sys.argv):
-        arg = sys.argv[i]
-        if arg == "--mute":
-            mute = True
-            i += 1
-        elif arg == "--volume" and i + 1 < len(sys.argv):
-            volume = float(sys.argv[i + 1])
-            i += 2
-        elif arg == "--add" and i + 1 < len(sys.argv):
-            add_audio = sys.argv[i + 1]
-            i += 2
-        elif arg == "--mix":
-            mix = True
-            i += 1
-        elif arg.startswith("--"):
-            print(f"  Unknown option: {arg}")
-            sys.exit(1)
-        elif input_file is None:
-            input_file = arg
-            i += 1
-        elif output_file is None:
-            output_file = arg
-            i += 1
-        else:
-            i += 1
+    ns = parse(
+        sys.argv[1:],
+        flags=("--mute", "--normalize", "--mix"),
+        options={"--volume": float, "--add": str},
+        doc=__doc__,
+    )
 
-    if not input_file or not output_file:
+    if len(ns.positionals) < 2:
         print(__doc__.strip())
         sys.exit(1)
 
-    process_audio(input_file, output_file, mute, volume, add_audio, mix)
+    input_file = ns.positionals[0]
+    output_file = ns.output or ns.positionals[1]
+    mute = "--mute" in ns.values
+    normalize = "--normalize" in ns.values
+    mix = "--mix" in ns.values
+    volume = ns.values.get("--volume")
+    add_audio = ns.values.get("--add")
+
+    process_audio(input_file, output_file, mute, volume, add_audio, mix, normalize)

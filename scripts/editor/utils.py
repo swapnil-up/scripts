@@ -4,15 +4,52 @@ import sys
 import os
 import json
 import datetime
+import tempfile
 
 VEDIT_DIR = os.path.expanduser("~/vedit")
 LOG_FILE = os.path.join(VEDIT_DIR, "edit.log")
+
+WHISPER_ROOT = os.path.expanduser("~/github/whisper.cpp")
+WHISPER_EXE = os.path.join(WHISPER_ROOT, "build/bin/whisper-cli")
+WHISPER_MODEL = os.path.join(WHISPER_ROOT, "models/ggml-small.en.bin")
+
+YT_UPLOADER = os.environ.get(
+    "YT_UPLOADER", os.path.expanduser("~/opt/youtubeuploader/youtubeuploader")
+)
+YT_SECRETS = os.environ.get(
+    "YT_SECRETS", os.path.expanduser("~/.config/youtubeuploader/client_secrets.json")
+)
+YT_TOKEN = os.environ.get(
+    "YT_TOKEN", os.path.expanduser("~/.config/youtubeuploader/request.token")
+)
 
 
 def get_vedit_dir():
     """Return the vedit data directory, creating it if needed."""
     os.makedirs(VEDIT_DIR, exist_ok=True)
+    for sub in ("raw", "work", "out", "gif"):
+        os.makedirs(os.path.join(VEDIT_DIR, sub), exist_ok=True)
     return VEDIT_DIR
+
+
+def raw_dir():
+    """~/vedit/raw — ingested GoPro footage and screen recordings."""
+    return os.path.join(get_vedit_dir(), "raw")
+
+
+def work_dir():
+    """~/vedit/work — intermediate pipeline stages."""
+    return os.path.join(get_vedit_dir(), "work")
+
+
+def out_dir():
+    """~/vedit/out — final processed videos ready to publish."""
+    return os.path.join(get_vedit_dir(), "out")
+
+
+def gif_dir():
+    """~/vedit/gif — exported GIFs."""
+    return os.path.join(get_vedit_dir(), "gif")
 
 
 def log_init(tool_name):
@@ -38,6 +75,11 @@ def sidecar_path(input_file, extension):
     """
     stem = os.path.splitext(os.path.basename(input_file))[0]
     return os.path.join(get_vedit_dir(), f"{stem}.{extension}")
+
+
+def texts_path(input_file):
+    """Sidecar for text overlays. Mirrors markers: ~/vedit/<stem>.texts.json"""
+    return sidecar_path(input_file, "texts.json")
 
 
 def auto_output_path(input_file, suffix, ext=None):
@@ -67,6 +109,16 @@ def run_ffmpeg(cmd, show_progress=True):
             print(f"Error: {result.stderr}", file=sys.stderr)
             sys.exit(1)
     return result
+
+
+def temp_path(suffix):
+    """Return a unique, non-predictable temp file path for ffmpeg to write.
+    The file is created then removed so ffmpeg (with -y) owns it; callers must
+    clean up after themselves. Replaces deprecated tempfile.mktemp."""
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+    os.unlink(path)
+    return path
 
 
 def get_duration(video_file):
@@ -126,9 +178,7 @@ def get_video_info(video_file):
             {
                 "width": video_stream.get("width"),
                 "height": video_stream.get("height"),
-                "fps": eval(
-                    video_stream.get("r_frame_rate", "0/1")
-                ),  # e.g. "30/1" -> 30
+                "fps": parse_r_frame_rate(video_stream.get("r_frame_rate", "0/1")),
                 "codec": video_stream.get("codec_name"),
             }
         )
@@ -147,6 +197,26 @@ def validate_file(filepath):
     if not os.path.isfile(filepath):
         print(f"Error: {filepath} not found")
         sys.exit(1)
+
+
+def parse_r_frame_rate(value):
+    """Safely parse an ffprobe 'r_frame_rate' like '30000/1001' -> float seconds."""
+    if value is None:
+        return 0
+    value = str(value).strip()
+    if not value or value == "0/1":
+        return 0
+    if "/" in value:
+        try:
+            num, den = value.split("/")
+            num, den = float(num), float(den)
+            return num / den if den else 0
+        except (ValueError, ZeroDivisionError):
+            return 0
+    try:
+        return float(value)
+    except ValueError:
+        return 0
 
 
 def format_time(seconds):

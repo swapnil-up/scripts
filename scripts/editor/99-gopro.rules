@@ -1,0 +1,20 @@
+# 99-gopro.rules
+# Auto-ingest GoPro footage when an SD card containing a DCIM folder is inserted.
+#
+# Install:
+#   sudo install -m 0644 99-gopro.rules /etc/udev/rules.d/99-gopro.rules
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# This runs gopro-ingest.sh asynchronously so udev doesn't wait on the copy.
+# The script resolves the mount point, renames files with timestamps, and
+# copies them into ~/vedit/raw/. Logs to ~/vedit/ingest.log.
+#
+# Replace /home/USER with your home path in the RUN line.
+ACTION=="add", KERNEL=="sd[a-z][0-9]", \
+  RUN+="/usr/bin/systemd-run --no-block --quiet --collect \
+        --uid=1000 --unit=vedit-ingest \
+        /home/swap/github/scripts/scripts/editor/gopro-ingest.sh %E{DEVNAME}"
+
+# Fallback: also match whole removable block devices (no partition table).
+ACTION=="add", KERNEL=="sd[a-z]", SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="", \
+  RUN+="/bin/true"

@@ -17,6 +17,7 @@ import json
 import subprocess
 from utils import (
     sidecar_path,
+    texts_path,
     auto_output_path,
     validate_file,
     get_video_info,
@@ -24,6 +25,7 @@ from utils import (
     log,
     log_init,
 )
+from sidecar import markers_path, fmt_pairs
 
 
 def run_script(script_name, args):
@@ -40,6 +42,53 @@ def run_script(script_name, args):
         return True
     except KeyboardInterrupt:
         return False
+
+
+def mark_and_cut(current_file, prompt_for_markers=True):
+    """
+    Iterative cut loop shared by the interactive menu and the guided full
+    pipeline: mark sections to remove, cut them out, and offer to re-cut.
+
+    Returns the file the caller should switch to, or current_file if nothing
+    changed / the user backed out. prompt_for_markers controls whether to
+    nudge the user to run the marker Stage first (it has already run for the
+    menu path).
+    """
+    while True:
+        state = check_state(current_file)
+
+        if not state["markers_exist"]:
+            if not prompt_for_markers:
+                print("\n  No cut markers for current file. Mark cuts first.")
+                input("  Press Enter...")
+                return current_file
+            print("\n  Step: Mark sections to cut out.")
+            print("  Press 'm' in mpv at each point, then 'q' to save.\n")
+            input("  Press Enter to open mpv...")
+            if not run_script("cut_marker.py", [current_file]):
+                input("  Press Enter...")
+                return current_file
+            state = check_state(current_file)
+
+        if not state["markers_exist"]:
+            print("  No markers were saved. Moving on.")
+            return current_file
+
+        log(f"action=process_cuts file={current_file}")
+        if not run_script("process_cuts.py", [current_file]):
+            input("  Press Enter...")
+            return current_file
+
+        current_file = state["cut_file"]
+        print(f"\n  ✓ Trimmed: {current_file}")
+        log(f"trimmed: {current_file}")
+
+        if not yesno("Trim this result too?", default=False):
+            break
+        print(f"  Now working on: {current_file}")
+        log(f"recut: current_file={current_file}")
+
+    return current_file
 
 
 def open_in_mpv(video_file):
@@ -71,10 +120,10 @@ def check_state(current_file):
     if current_file is None:
         return {"file": None}
 
-    markers_file = sidecar_path(current_file, "markers.json")
+    markers_file = markers_path(current_file)
     markers_exist = os.path.exists(markers_file)
     cut_file = auto_output_path(current_file, "cut")
-    texts_file = f"{current_file}.texts.json"
+    texts_file = texts_path(current_file)
     texts_exist = os.path.exists(texts_file)
     text_output = auto_output_path(current_file, "text")
     text_output_exists = os.path.exists(text_output)
@@ -165,7 +214,8 @@ def show_markers(state):
     print(f"\n  Markers file: {state['markers_file']}")
     print(f"  {'─' * 50}")
 
-    if len(markers) % 2 != 0:
+    pairs = fmt_pairs(markers)
+    if pairs is None:
         print(f"  ⚠ Odd number of markers ({len(markers)}) — missing a pair end!")
         for i, m in enumerate(markers, 1):
             print(f"    {i}. {format_time(m)}")
@@ -174,12 +224,10 @@ def show_markers(state):
 
     total_cut = 0
     print(f"  Sections to REMOVE:")
-    for i in range(0, len(markers), 2):
-        start = markers[i]
-        end = markers[i + 1]
+    for i, (start, end) in enumerate(pairs):
         dur = end - start
         total_cut += dur
-        print(f"    Pair {i//2 + 1}: {format_time(start)} → {format_time(end)}  ({dur:.1f}s)")
+        print(f"    Pair {i + 1}: {format_time(start)} → {format_time(end)}  ({dur:.1f}s)")
 
     print(f"\n  Total to remove: {format_time(total_cut)} ({total_cut:.1f}s)")
     print(f"  (Everything else is KEPT in the output)")
@@ -246,9 +294,9 @@ def main():
         if action == "record_screen":
             log(f"action=record_screen")
             run_script("screen_record.py", ["--select"])
-            from utils import get_vedit_dir
+            from utils import raw_dir
             import glob
-            pattern = os.path.join(get_vedit_dir(), "screen_*.mp4")
+            pattern = os.path.join(raw_dir(), "screen_*.mp4")
             files = sorted(glob.glob(pattern))
             if files:
                 latest = files[-1]
@@ -263,14 +311,13 @@ def main():
             q_map = {"d": "demo", "l": "low", "m": "medium", "h": "high", "x": "max"}
             q = input("  Quality (d)emo / (l)ow / (m)edium / (h)igh / ma(x) [d]: ").strip().lower() or "d"
             quality = q_map.get(q, q)
-            from utils import get_vedit_dir
-            gif_dir = os.path.join(get_vedit_dir(), "gif")
-            os.makedirs(gif_dir, exist_ok=True)
-            out = input(f"  Output filename (default: {gif_dir}/demo.gif): ").strip()
+            from utils import gif_dir
+            os.makedirs(gif_dir(), exist_ok=True)
+            out = input(f"  Output filename (default: {gif_dir()}/demo.gif): ").strip()
             if not out:
-                out = os.path.join(gif_dir, "demo.gif")
+                out = os.path.join(gif_dir(), "demo.gif")
             elif not os.path.isabs(out) and "/" not in out:
-                out = os.path.join(gif_dir, out)
+                out = os.path.join(gif_dir(), out)
             run_script("gif.py", ["--latest", out, "--quality", quality])
             input("  Press Enter...")
 
@@ -319,19 +366,8 @@ def main():
 
         elif action == "process_cuts":
             if current_file is None: continue
-            if not state["markers_exist"]:
-                print("\n  No cut markers for current file. Mark cuts first.")
-                input("  Press Enter...")
-                continue
             log(f"action=process_cuts file={current_file}")
-            if run_script("process_cuts.py", [current_file]):
-                result = state["cut_file"]
-                log(f"trimmed: {result}")
-                print(f"\n  ✓ Trimmed: {result}")
-                current_file = result
-                if yesno("Trim this result too?", default=False):
-                    print(f"  Now working on: {current_file}")
-                    log(f"recut: current_file={current_file}")
+            current_file = mark_and_cut(current_file, prompt_for_markers=False)
             input("  Press Enter...")
 
         elif action == "mark_text":
@@ -368,7 +404,7 @@ def main():
 
 def handle_gif(current_file):
     """Interactive prompt for creating a GIF."""
-    from utils import get_duration, get_vedit_dir
+    from utils import get_duration, gif_dir
     source = current_file
     dur = get_duration(source)
     stem = os.path.splitext(os.path.basename(source))[0]
@@ -386,14 +422,14 @@ def handle_gif(current_file):
     q = input("  Quality (d)emo / (l)ow / (m)edium / (h)igh / ma(x) [m]: ").strip().lower() or "m"
     quality = quality_map.get(q, q)
 
-    gif_dir = os.path.join(get_vedit_dir(), "gif")
-    os.makedirs(gif_dir, exist_ok=True)
-    default_out = os.path.join(gif_dir, f"{stem}.gif")
+    gif_dir_target = gif_dir()
+    os.makedirs(gif_dir_target, exist_ok=True)
+    default_out = os.path.join(gif_dir_target, f"{stem}.gif")
     out = input(f"  Output filename (default: {default_out}): ").strip()
     if not out:
         out = default_out
     elif not os.path.isabs(out) and "/" not in out:
-        out = os.path.join(gif_dir, out)
+        out = os.path.join(gif_dir_target, out)
 
     args = [source, out, "--duration", duration, "--quality", quality]
     if start:
@@ -444,34 +480,8 @@ def run_full_pipeline(start_file):
     print_header("Full Pipeline")
     current_file = start_file
 
-    # Cutting loop
-    while True:
-        print(f"\n  Current file: {current_file}")
-        state = check_state(current_file)
-
-        if not state["markers_exist"]:
-            print("\n  Step: Mark sections to cut out.")
-            print("  Press 'm' in mpv at each point, then 'q' to save.\n")
-            input("  Press Enter to open mpv...")
-            if not run_script("cut_marker.py", [current_file]):
-                input("  Press Enter...")
-                return start_file
-            state = check_state(current_file)
-
-        if not state["markers_exist"]:
-            print("  No markers were saved. Moving to text stage.")
-            break
-
-        print(f"\n  Removing marked sections...")
-        if not run_script("process_cuts.py", [current_file]):
-            input("  Press Enter...")
-            return start_file
-
-        current_file = state["cut_file"]
-        print(f"\n  ✓ Trimmed: {current_file}")
-
-        if not yesno("Trim this result too?", default=False):
-            break
+    # Cutting loop (shared with the interactive menu)
+    current_file = mark_and_cut(current_file, prompt_for_markers=True)
 
     # Text stage
     if not os.path.exists(current_file):

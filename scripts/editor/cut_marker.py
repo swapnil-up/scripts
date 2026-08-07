@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import sys
 import subprocess
-import json
 import os
-from utils import sidecar_path, format_time
+from utils import format_time, sidecar_path
+from sidecar import markers_path, load_or_reset, fmt_pairs, save_json
 
 
 def mark_cuts(input_file):
@@ -22,25 +22,12 @@ def mark_cuts(input_file):
     Sidecar saved to: ~/vedit/<stem>.markers.json
     """
 
-    markers_file = sidecar_path(input_file, "markers.json")
+    markers_file = markers_path(input_file)
     timestamp_file = sidecar_path(input_file, "timestamps.tmp")
 
-    markers = []
-    if os.path.exists(markers_file):
-        response = input(
-            "Found existing markers for this file. "
-            "(l)oad them, (d)elete and start fresh, or (c)ancel? "
-        )
-        if response.lower() == "l":
-            with open(markers_file, "r") as f:
-                markers = json.load(f)
-            print(f"Loaded {len(markers)} existing markers")
-        elif response.lower() == "d":
-            os.remove(markers_file)
-            print("Deleted old markers, starting fresh")
-        else:
-            print("Cancelled")
-            return
+    markers, cancelled = load_or_reset(markers_file, "cut markers")
+    if cancelled:
+        return
 
     print(f"\nMarking cuts for: {input_file}")
     print(f"Sidecar: {markers_file}")
@@ -97,8 +84,7 @@ def mark_cuts(input_file):
             markers.extend(new_markers)
             markers.sort()
 
-            with open(markers_file, "w") as f:
-                json.dump(markers, f, indent=2)
+            save_json(markers_file, markers)
 
             os.remove(timestamp_file)
 
@@ -107,14 +93,13 @@ def mark_cuts(input_file):
             for i, m in enumerate(markers, 1):
                 print(f"  {i}. {format_time(m)}")
 
-            if len(markers) % 2 == 0:
+            pairs = fmt_pairs(markers)
+            if pairs:
                 print("\nSections to CUT OUT:")
-                for i in range(0, len(markers), 2):
-                    start_m = markers[i]
-                    end_m = markers[i + 1]
+                for i, (start_m, end_m) in enumerate(pairs):
                     duration = end_m - start_m
                     print(
-                        f"  Cut {i // 2 + 1}: {format_time(start_m)} -> {format_time(end_m)} ({duration:.1f}s)"
+                        f"  Cut {i + 1}: {format_time(start_m)} -> {format_time(end_m)} ({duration:.1f}s)"
                     )
             else:
                 print("\nWARNING: Odd number of markers — they must come in pairs.")
@@ -126,7 +111,10 @@ def mark_cuts(input_file):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    from parser import parse
+
+    ns = parse(sys.argv[1:], doc=None)
+    if not ns.positionals:
         print("Usage: cut_marker.py INPUT_VIDEO")
         print("Example: cut_marker.py raw_workout.mp4")
         print("\nOpens video in mpv. Press 'm' to mark cut points in pairs.")
@@ -134,4 +122,4 @@ if __name__ == "__main__":
         print("Sidecar saved to ~/vedit/<stem>.markers.json")
         sys.exit(1)
 
-    mark_cuts(sys.argv[1])
+    mark_cuts(ns.positionals[0])

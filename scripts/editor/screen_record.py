@@ -15,13 +15,13 @@ import os
 import subprocess
 import signal
 import datetime
-from utils import get_vedit_dir
+from utils import raw_dir
 
 
 def auto_name():
-    """Generate a timestamped filename in ~/vedit/."""
+    """Generate a timestamped filename in ~/vedit/raw/."""
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(get_vedit_dir(), f"screen_{ts}.mp4")
+    return os.path.join(raw_dir(), f"screen_{ts}.mp4")
 
 
 def select_region():
@@ -81,38 +81,25 @@ def record_screen(output_file, region=None, fps=30, show_mouse=True):
 
 
 if __name__ == "__main__":
-    output_file = None
-    region = None
-    fps = 30
-    show_mouse = True
-    select_mode = False
+    from parser import parse
 
-    i = 1
-    while i < len(sys.argv):
-        arg = sys.argv[i]
-        if arg == "--select":
-            select_mode = True
-            i += 1
-        elif arg == "--region" and i + 4 < len(sys.argv):
-            region = (
-                int(sys.argv[i + 1]),
-                int(sys.argv[i + 2]),
-                int(sys.argv[i + 3]),
-                int(sys.argv[i + 4]),
-            )
-            i += 5
-        elif arg == "--fps" and i + 1 < len(sys.argv):
-            fps = int(sys.argv[i + 1])
-            i += 2
-        elif arg == "--no-mouse":
-            show_mouse = False
-            i += 1
-        elif arg.startswith("--"):
-            print(f"  Unknown option: {arg}")
-            sys.exit(1)
-        else:
-            output_file = arg
-            i += 1
+    argv = list(sys.argv[1:])
+    region = None
+    if "--region" in argv:
+        idx = argv.index("--region")
+        region = tuple(int(x) for x in argv[idx + 1:idx + 5])
+        del argv[idx:idx + 5]
+
+    ns = parse(
+        argv,
+        flags=("--select", "--no-mouse"),
+        options={"--fps": int},
+    )
+
+    output_file = ns.output or (ns.positionals[0] if ns.positionals else None)
+    fps = ns.values.get("--fps", 30)
+    show_mouse = "--no-mouse" not in ns.values
+    select_mode = "--select" in ns.values
 
     if select_mode:
         print("  Select a region on screen...")

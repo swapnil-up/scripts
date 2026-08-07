@@ -41,6 +41,7 @@ SCRIPTS=(
 	"fonts.sh"      # Nerd fonts & emojis
 	"piper.sh"      # Piper TTS (downloads model)
 	"whisper.sh"    # Whisper.cpp (builds from source)
+	"youtube-upload.sh" # youtubeuploader binary + YouTube OAuth
 	"stow.sh"       # Linking dotfiles
 	"services.sh"   # Enable user services (kanata, etc.)
 )

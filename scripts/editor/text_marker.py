@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import sys
 import subprocess
-import json
 import os
-from utils import format_time
+from utils import format_time, sidecar_path
+from sidecar import texts_path, load_or_reset, save_json
 
 
 def mark_text_overlays(input_file):
@@ -16,24 +16,12 @@ def mark_text_overlays(input_file):
     - q to quit and save
     """
 
-    texts_file = f"{input_file}.texts.json"
+    texts_file = texts_path(input_file)
 
     # Check if texts already exist
-    text_overlays = []
-    if os.path.exists(texts_file):
-        response = input(
-            f"Found existing text overlays. (l)oad them, (d)elete and start fresh, or (c)ancel? "
-        )
-        if response.lower() == "l":
-            with open(texts_file, "r") as f:
-                text_overlays = json.load(f)
-            print(f"Loaded {len(text_overlays)} existing text overlays")
-        elif response.lower() == "d":
-            os.remove(texts_file)
-            print("Deleted old texts, starting fresh")
-        else:
-            print("Cancelled")
-            return
+    text_overlays, cancelled = load_or_reset(texts_file, "text overlays")
+    if cancelled:
+        return
 
     print(f"\nAdding text overlays to: {input_file}")
     print("Controls:")
@@ -52,10 +40,11 @@ def mark_text_overlays(input_file):
         print()
 
     # MPV lua script to capture timestamps when 't' is pressed
+    timestamp_file = sidecar_path(input_file, "text_timestamps.tmp")
     lua_script = f"""
     function add_text_overlay()
         local time = mp.get_property_number("time-pos")
-        local file = io.open("{input_file}.text_timestamps.tmp", "a")
+        local file = io.open("{timestamp_file}", "a")
         file:write(string.format("%.3f\\n", time))
         file:close()
         mp.osd_message(string.format("Text marker at: %.2fs", time), 2)
@@ -75,7 +64,7 @@ def mark_text_overlays(input_file):
         subprocess.run(cmd)
 
         # Read timestamps
-        timestamp_file = f"{input_file}.text_timestamps.tmp"
+        timestamp_file = sidecar_path(input_file, "text_timestamps.tmp")
         if os.path.exists(timestamp_file):
             with open(timestamp_file, "r") as f:
                 new_timestamps = [float(line.strip()) for line in f if line.strip()]
@@ -121,8 +110,7 @@ def mark_text_overlays(input_file):
             text_overlays.sort(key=lambda x: x["start"])
 
             # Save
-            with open(texts_file, "w") as f:
-                json.dump(text_overlays, f, indent=2)
+            save_json(texts_file, text_overlays)
 
             os.remove(timestamp_file)
 
@@ -140,7 +128,10 @@ def mark_text_overlays(input_file):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    from parser import parse
+
+    ns = parse(sys.argv[1:], doc=None)
+    if not ns.positionals:
         print("Usage: text_marker.py INPUT_VIDEO")
         print("Example: text_marker.py edited_workout.mp4")
         print("\nOpens video in mpv. Press 't' at each point you want text to appear.")
@@ -149,4 +140,4 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
-    mark_text_overlays(sys.argv[1])
+    mark_text_overlays(ns.positionals[0])

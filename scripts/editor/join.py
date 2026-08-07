@@ -12,13 +12,12 @@ Usage:
 import sys
 import os
 import glob
-import tempfile
-from utils import run_ffmpeg, validate_file, get_vedit_dir
+from utils import run_ffmpeg, validate_file, raw_dir, temp_path
 
 
 def latest_recordings(n=10):
     """Return the N most recent screen recordings."""
-    pattern = os.path.join(get_vedit_dir(), "screen_*.mp4")
+    pattern = os.path.join(raw_dir(), "screen_*.mp4")
     files = sorted(glob.glob(pattern))
     return files[-n:]
 
@@ -57,7 +56,7 @@ def join_clips(clips, output_file, force_reencode=False):
 
     if use_copy:
         print("\n  Using stream copy (same codecs detected).")
-        concat_file = tempfile.mktemp(suffix=".txt")
+        concat_file = temp_path(".txt")
         try:
             with open(concat_file, "w") as f:
                 for clip in clips:
@@ -94,33 +93,20 @@ def join_clips(clips, output_file, force_reencode=False):
 
 
 if __name__ == "__main__":
-    clips = []
-    output_file = None
-    force_reencode = False
-    use_latest = False
-    n_latest = 10
+    from parser import parse
 
-    i = 1
-    while i < len(sys.argv):
-        arg = sys.argv[i]
-        if arg == "-o" and i + 1 < len(sys.argv):
-            output_file = sys.argv[i + 1]
-            i += 2
-        elif arg == "--reencode":
-            force_reencode = True
-            i += 1
-        elif arg == "--latest":
-            use_latest = True
-            i += 1
-        elif arg.startswith("--"):
-            print(f"  Unknown option: {arg}")
-            sys.exit(1)
-        else:
-            clips.append(arg)
-            i += 1
+    ns = parse(
+        sys.argv[1:],
+        flags=("--reencode", "--latest"),
+        doc=__doc__,
+    )
 
-    if use_latest:
-        clips = latest_recordings(n_latest)
+    clips = list(ns.positionals)
+    output_file = ns.output
+    force_reencode = "--reencode" in ns.values
+
+    if "--latest" in ns.values:
+        clips = latest_recordings(10)
 
     if len(clips) < 2:
         print(__doc__.strip())
