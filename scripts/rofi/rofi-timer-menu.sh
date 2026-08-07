@@ -1,8 +1,10 @@
 #!/bin/bash
 # rofi-timer-menu.sh
 # Set, view, and cancel countdown timers via the timer-daemon socket.
+# Saved presets in ~/.config/timers/presets can be started with a single click.
 
 DAEMON="$HOME/.local/bin/timer-daemon"
+PRESET_FILE="${TIMER_PRESETS_FILE:-$HOME/.config/timers/presets}"
 
 send() {
 	"$DAEMON" "$@"
@@ -47,11 +49,44 @@ sys.exit(1)
 PYEOF
 }
 
-# Build the menu: New Timer + one cancel entry per active timer
-menu=$(send list | python3 -c '
+resolve_preset() {
+	# resolve_preset NAME  -> echoes "NAME|DURATION" from the presets file
+	local target="$1" name dur
+	[ -f "$PRESET_FILE" ] || return 1
+	while IFS= read -r line; do
+		case "$line" in
+			"" | \#*) continue ;;
+		esac
+		name="${line%%|*}"
+		dur="${line#*|}"
+		name="${name%"${name##*[![:space:]]}"}"  # trim trailing space
+		if [ "$name" = "$target" ]; then
+			printf '%s|%s' "$name" "$dur"
+			return 0
+		fi
+	done < "$PRESET_FILE"
+	return 1
+}
+
+# Build the menu: New Timer + saved presets + one cancel entry per active timer
+presets=$(python3 -c '
+import sys, os
+path = os.path.expanduser(os.environ.get("TIMER_PRESETS_FILE", "~/.config/timers/presets"))
+if not os.path.isfile(path):
+    sys.exit(0)
+for line in open(path):
+    line = line.strip()
+    if not line or line.startswith("#") or "|" not in line:
+        continue
+    name, dur = line.split("|", 1)
+    dur = dur.strip()
+    if dur:
+        print(f"Set: {name.strip()}")
+')
+
+active=$(send list | python3 -c '
 import json, sys
 data = json.loads(sys.stdin.read())
-lines = ["New Timer"]
 for t in data.get("timers", []):
     if t["remaining"] <= 0:
         continue
@@ -63,13 +98,21 @@ for t in data.get("timers", []):
         label = f"{label} ({h}:{m:02d}:{s:02d})"
     else:
         label = f"{label} ({m:02d}:{s:02d})"
-    lines.append(f"Cancel: {label}")
-print("\n".join(lines))
+    print(f"Cancel: {label}")
 ')
 
-choice=$(echo "$menu" | rofi -dmenu -p "Timer")
+menu="New Timer"
+[ -n "$presets" ] && menu="$menu
+── Presets ──
+$presets"
+[ -n "$active" ] && menu="$menu
+── Active ──
+$active"
+
+choice=$(printf '%s\n' "$menu" | rofi -dmenu -p "Timer")
 
 case "$choice" in
+"" ) exit 0 ;;
 "New Timer")
 	# ask for minutes (or seconds with an "s" suffix)
 	dur_input=$(rofi -dmenu -p "Duration (1h, 20m, 90s, 25 = minutes)")
@@ -84,10 +127,26 @@ case "$choice" in
 	label=$(rofi -dmenu -p "Label (optional)")
 	send start "$secs" "$label"
 	;;
-Cancel:*)
+"Set: "*)
+	# single-click preset: start the recorded timer, reusing its label
+	name="${choice#Set: }"
+	if resolved=$(resolve_preset "$name"); then
+		pname="${resolved%%|*}"
+		pdur="${resolved#*|}"
+		secs=$(fmt_duration "$pdur")
+		if [ -n "$secs" ] && [ "$secs" -gt 0 ]; then
+			send start "$secs" "$pname"
+			notify-send "Timer" "Started: $pname"
+		else
+			notify-send "Timer" "Bad preset duration for $pname"
+		fi
+	fi
+	;;
+"Cancel: "*)
 	id=$(send list | python3 -c '
 import json, sys
 data = json.loads(sys.stdin.read())
+target = sys.argv[1]
 for t in data.get("timers", []):
     if t["remaining"] <= 0:
         continue
@@ -99,7 +158,7 @@ for t in data.get("timers", []):
         label = f"{label} ({h}:{m:02d}:{s:02d})"
     else:
         label = f"{label} ({m:02d}:{s:02d})"
-    if label == sys.argv[1]:
+    if label == target:
         print(t["id"])
         break
 ' "$choice")

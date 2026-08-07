@@ -1,0 +1,4 @@
+# Saved timer presets for rofi-timer-menu.sh
+# Each line: Preset Name|Duration  (duration uses same format as the menu)
+gtg         |60m
+1 minute    |5m
