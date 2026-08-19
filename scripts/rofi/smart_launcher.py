@@ -99,6 +99,7 @@ def build_candidates():
         ",w <q>    search the web gh, yt, lb, wiki",
         ",piper      text to speech (clipboard)",
         ",whisper    speech to text (record)",
+        ",at         audio transcribe + clean",
     ]
 
     items.append("---")
@@ -239,6 +240,13 @@ def handle_command(base, sub, rest):
         term = os.environ.get("TERMINAL", "x-terminal-emulator")
         subprocess.run(
             [term, "-e", "bash", "-c", "~/github/scripts/scripts/utils/whisper.sh"]
+        )
+
+    elif base == "at":
+        term = os.environ.get("TERMINAL", "x-terminal-emulator")
+        subprocess.run(
+            [term, "-e", "bash", "-c",
+             "~/github/scripts/scripts/audio-transcribe.sh"]
         )
 
     else:
