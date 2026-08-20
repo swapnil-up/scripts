@@ -128,3 +128,36 @@
 "By three methods we may learn wisdom: First, by reflection, which is noblest; Second, by imitation, which is easiest; and third by experience, which is the bitterest" - Confucius
 "When we see men of worth, we should think of equaling them; when we see men of a contrary character, we should turn inwards and examine ourselves" - Confucius
 "Study the past if you would define the future" - Confucius
+
+"Talk is cheap. Show me the code" - Linus Torvalds
+"Programs must be written for people to read, and only incidentally for machines to execute" - Abelson & Sussman
+"Any fool can write code that a computer can understand. Good programmers write code that humans can understand" - Martin Fowler
+"First, solve the problem. Then, write the code" - John Johnson
+"The best error message is the one that never shows up" - Thomas Fuchs
+"Code is like humor. When you have to explain it, it's bad" - Cory House
+"Fix the cause, not the symptom" - Steve Maguire
+"Optimism is an occupational hazard of programming: feedback is the treatment" - Kent Beck
+"Simplicity is the soul of efficiency" - Austin Freeman
+"Make it work, make it right, make it fast" - Kent Beck
+
+"I have not failed. I've just found 10,000 ways that won't work" - Thomas Edison
+"The only way to do great work is to love what you do" - Steve Jobs
+"Stay hungry, stay foolish" - Steve Jobs
+"well done is better than well said" - Benjamin Franklin
+"Life is what happens when you're busy making other plans" - John Lennon
+"In the middle of difficulty lies opportunity" - Albert Einstein
+"A ship in harbor is safe, but that is not what ships are built for" - John A. Shedd
+"You miss 100% of the shots you don't take" - Wayne Gretzky
+"Every saint has a past, and every sinner has a future" - Oscar Wilde
+"We are what we repeatedly do. Excellence, then, is not an act, but a habit" - Aristotle
+
+"There are only two hard things in Computer Science: cache invalidation and naming things" - Phil Karlton
+"It works on my machine" - Every developer ever
+"Deleted code is debugged code" - Jeff Sickel
+"Measuring programming progress by lines of code is like measuring aircraft building progress by weight" - Bill Gates
+"Programming is thinking, not typing" - Casey Muratori
+"The computer was born to solve problems that did not exist before" - Bill Gates
+"Relations are the rows that connect the tables of our lives" - Unknown
+"There is no place like 127.0.0.1" - Unknown
+"Unix is simple. It just takes a genius to understand its simplicity" - Dennis Ritchie
+"The best thing about a boolean is even if you are wrong, you are only off by a bit"

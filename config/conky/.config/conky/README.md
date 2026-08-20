@@ -15,12 +15,13 @@ Just shell scripts, text files, and Conky.
 
 The dashboard is composed of **six widgets**, positioned around a 1366×768 screen:
 
-1. Projects
-2. Todo
-3. Stats
-4. Recent Notes
-5. Quotes
-6. Year Progress
+1. Todo
+2. Stats
+3. Recent Notes
+4. Quotes
+5. Year Progress
+6. Sunrise/Sunset
+7. XKCD
 
 Each widget:
 - Runs independently
@@ -38,20 +39,7 @@ Each widget:
 
 ## Widgets
 
-### 1. Projects (`conky_projects.conf`)
-
-Displays a short list of ongoing projects.
-
-- Source: `projects.txt`
-- One project per line
-- Updated periodically via `cat`
-
-Purpose:
-A static reminder of what I'm currently working on, to hopefully not start yet another new project
-
----
-
-### 2. Todo (`conky_todo.conf`)
+### 1. Todo (`conky_todo.conf`)
 
 Displays the current todo list.
 
@@ -65,7 +53,7 @@ Links great with rofi which does the editing
 
 ---
 
-### 3. Stats (`conky_stats.conf`)
+### 2. Stats (`conky_stats.conf`)
 
 Shows lightweight activity metrics.
 
@@ -81,7 +69,7 @@ How's the progress going?
 
 ---
 
-### 4. Recent Notes (`conky_notes.conf`)
+### 3. Recent Notes (`conky_notes.conf`)
 
 Lists recently modified Obsidian notes.
 
@@ -93,7 +81,7 @@ Surface recent thinking without opening the obsidian vault. Acts as a gentle nud
 
 ---
 
-### 5. Quotes (`conky_quotes.conf`)
+### 4. Quotes (`conky_quotes.conf`)
 
 Displays a single quote that changes periodically.
 
@@ -103,11 +91,11 @@ Displays a single quote that changes periodically.
 - Fixed max width with automatic text wrapping
 
 Purpose:
-Just a quote every hour, like a cookie treat for the soul. Heh maybe I should add in jokes here?
+Mix of philosophy, humor, and programming wisdom. A cookie treat for the soul.
 
 ---
 
-### 6. Year Progress (`conky_year.conf`)
+### 5. Year Progress (`conky_year.conf`)
 
 Visualizes the passage of the year as dots, grouped by month.
 
@@ -124,6 +112,33 @@ Time awareness without abstraction. So fucking cool. Thanks Sagar.
 
 ---
 
+### 6. Sunrise/Sunset (`conky_sunrise.conf`)
+
+Shows today's sunrise, sunset, and day length for Kathmandu.
+
+- Script: `scripts/sunrise_sunset.sh`
+- API: sunrise-sunset.org
+- Converts UTC to local time (UTC+5:45)
+
+Purpose:
+Know the shape of your day. When does light start, when does it end.
+
+---
+
+### 7. XKCD (`conky_xkcd.conf`)
+
+Displays a random XKCD comic with title and alt text.
+
+- Script: `scripts/xkcd_random.sh`
+- Fetches random comic via XKCD JSON API
+- Downloads image to `/tmp/conky_xkcd/`
+- Shows comic image + title + alt text
+
+Purpose:
+A moment of geek humor. Because sometimes you need to laugh at a penguin comic.
+
+---
+
 ## Directory Structure
 
 ./
@@ -134,21 +149,22 @@ Time awareness without abstraction. So fucking cool. Thanks Sagar.
 │   ├── github_today.sh*
 │   ├── github_week.sh*
 │   ├── obsidian_last_notes.sh*
-│   └── year_dots.sh*
-├── conky.conf
+│   ├── sunrise_sunset.sh*
+│   ├── year_dots.sh*
+│   └── xkcd_random.sh*
 ├── conky_notes.conf
-├── conky_projects.conf
 ├── conky_quotes.conf
 ├── conky_stats.conf
+├── conky_sunrise.conf
 ├── conky_todo.conf
+├── conky_xkcd.conf
 ├── conky_year.conf
-├── projects.txt
 ├── quotes.txt
 ├── README.md
 ├── secrets.env
 └── todo.txt
 
-2 directories, 18 files
+2 directories, 17 files
 
 ---
 

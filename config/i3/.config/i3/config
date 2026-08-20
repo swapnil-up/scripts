@@ -359,14 +359,7 @@ bindsym $mod+n exec --no-startup-id ~/.local/bin/quicknote.sh
 bindsym XF86Launch7 exec --no-startup-id ~/github/scripts/scripts/utils/whisper-toggle.sh
 
 # conky
-# exec_always --no-startup-id conky -c ~/.config/conky/conky.conf
-
-exec_always --no-startup-id conky -c ~/.config/conky/conky_projects.conf
-exec_always --no-startup-id conky -c ~/.config/conky/conky_todo.conf
-exec_always --no-startup-id conky -c ~/.config/conky/conky_stats.conf
-exec_always --no-startup-id conky -c ~/.config/conky/conky_notes.conf
-exec_always --no-startup-id conky -c ~/.config/conky/conky_year.conf
-exec_always --no-startup-id conky -c ~/.config/conky/conky_quotes.conf
+exec_always --no-startup-id bash -c 'killall conky 2>/dev/null; sleep 0.5; conky -c ~/.config/conky/conky_todo.conf & conky -c ~/.config/conky/conky_stats.conf & conky -c ~/.config/conky/conky_notes.conf & conky -c ~/.config/conky/conky_year.conf & conky -c ~/.config/conky/conky_quotes.conf & conky -c ~/.config/conky/conky_sunrise.conf & wait'
 
 
 
