@@ -12,6 +12,14 @@ Utilities and automation.
 | `obsidian/` | Incremental笔记, move unfinished |
 | `rofi/` | Smart launcher, todo menu, timer menu |
 | `snippets/` | FastAPI, React, JS templates |
+
+## timer-daemon
+
+Logs start/expire/stop events to `~/.local/state/timer-daemon.log` (JSON lines).
+
+```bash
+cat ~/.local/state/timer-daemon.log | jq .
+```
 | `utils/` | piper (TTS), whisper (STT), countdown |
 | `template/` | TIL, why, obsidian templates |
 

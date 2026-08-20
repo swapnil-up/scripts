@@ -56,6 +56,26 @@ def socket_path():
     return f"/tmp/{SOCKET_NAME}-{os.getuid()}"
 
 
+def log_file():
+    base = os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))
+    return os.path.join(base, "timer-daemon.log")
+
+
+def log_event(event, **kwargs):
+    import datetime
+    entry = {
+        "ts": datetime.datetime.now().isoformat(),
+        "event": event,
+        **kwargs,
+    }
+    try:
+        os.makedirs(os.path.dirname(log_file()), exist_ok=True)
+        with open(log_file(), "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass
+
+
 def state_file():
     base = os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))
     return os.path.join(base, "timer-daemon.json")
@@ -88,6 +108,7 @@ def save_state():
 
 def ring(t):
     label = t["label"] or "Timer"
+    log_event("expire", id=t["id"], label=label, duration=t["duration"])
     subprocess.run(["dunstify", "-u", "critical", "-t", "0", "Timer done", label])
     sound = RING_SOUND if os.path.exists(RING_SOUND) else RING_SOURCE
     if not os.path.exists(sound):
@@ -135,6 +156,7 @@ def handle(cmd):
                 "duration": secs,
             }
         save_state()
+        log_event("start", id=tid, label=cmd.get("label", ""), duration=secs)
         return {"ok": True, "id": tid}
     if op == "stop":
         try:
@@ -142,8 +164,10 @@ def handle(cmd):
         except (TypeError, ValueError):
             return {"ok": False, "error": "invalid id"}
         with _lock:
-            timers.pop(tid, None)
+            t = timers.pop(tid, None)
         save_state()
+        if t:
+            log_event("stop", id=tid, label=t["label"], duration=t["duration"])
         return {"ok": True}
     if op == "list":
         now = time.time()
