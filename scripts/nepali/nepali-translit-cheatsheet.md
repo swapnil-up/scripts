@@ -18,6 +18,7 @@ step back one transliteration unit.
 | ज्ञ | `gyn` | ज्ञ |
 | त्र | `tra` | त्र |
 | प्र | `pra` | प्र |
+| क्र | `kra` | क्र |
 | स्त | `sta` | स्त |
 
 Gotchas: `ks` → क्स (ka+virama+sa, halant stays visible) — for the क्ष glyph use

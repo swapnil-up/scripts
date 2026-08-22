@@ -72,6 +72,7 @@ shr → श्र   (shra)
 gyn → ज्ञ
 tra → त्र
 pra → प्र
+kra → क्र   (k\ra keeps halant visible instead)
 sta → स्त
 ——— specials ———
 M / N → ं  (anusvara; nM → नं)
