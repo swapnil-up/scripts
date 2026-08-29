@@ -14,6 +14,15 @@ output.txt
 wget-log
 scraped_content.txt
 
+# Espanso runtime state (written into stow-symlinked dir)
+config/espanso/.config/espanso/state.json
+config/espanso/.config/espanso/user/
+
+# Neovim runtime dirs (written into stow-symlinked dir)
+config/nvim/.config/nvim/swap/
+config/nvim/.config/nvim/undodir/
+config/nvim/.config/nvim/shada/
+
 # VS Code runtime data (stow package tracks only User/{settings,keybindings}.json)
 config/vscode/.config/Code/*
 !config/vscode/.config/Code/User/

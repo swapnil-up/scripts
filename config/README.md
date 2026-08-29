@@ -6,20 +6,21 @@ Dotfiles managed with git-stow. Each subdirectory is a stow package. Usually aut
 
 | Package | Description |
 |---------|-------------|
+| `agents/` | Agent configs |
 | `bash/` | .bashrc, .profile |
-| `zsh/` | .zshrc |
-| `nvim/` | Neovim (Kickstart-based) |
-| `i3/` | Window manager config |
-| `rofi/` | App launcher |
-| `kanata/` | Keyboard layout |
-| `espanso/` | Text expansion |
-| `vscode/` | Editor settings |
-| `starship/` | Shell prompt |
-| `dunst/` | Notifications |
 | `conky/` | System info |
-| `picom/` | Compositor |
+| `dunst/` | Notifications |
+| `espanso/` | Text expansion |
+| `gtk/` | GTK 3/4 settings |
+| `i3/` | Window manager config |
 | `i3status/` | Status bar |
+| `kanata/` | Keyboard layout |
+| `nvim/` | Neovim (Kickstart-based) |
+| `picom/` | Compositor |
+| `rofi/` | App launcher |
+| `starship/` | Shell prompt |
 | `timer/` | Timer daemon (systemd user unit) |
+| `vscode/` | Editor settings |
 
 ## Stow Usage
 
