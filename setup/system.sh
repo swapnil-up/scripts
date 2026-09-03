@@ -16,4 +16,7 @@ sudo usermod -aG video $USER
 gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark' 2>/dev/null || true
 gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark' 2>/dev/null || true
 
+# Linger: allow systemd user services to start on boot (kanata, etc.)
+sudo loginctl enable-linger "$USER" 2>/dev/null || true
+
 echo ">>> SYSTEM_COMPLETE <<<"

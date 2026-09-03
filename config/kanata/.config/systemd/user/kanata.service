@@ -6,8 +6,8 @@ After=graphical-session.target
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/kanata -c %h/.config/kanata/kanata.kbd -n
-Restart=on-failure
+Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target

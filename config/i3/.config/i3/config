@@ -289,6 +289,9 @@ bindsym $mod+minus scratchpad show
 # remove a floating window from scratchpad
 # bindsym $mod+x floating disable; floating enable
 
+# start kanata keyboard remapper
+exec --no-startup-id systemctl --user start kanata
+
 #custom start script
 exec --no-startup-id sleep 5 && ~/startup.sh
 

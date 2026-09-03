@@ -70,8 +70,13 @@ if [ ! -f "/opt/firefox-dev/firefox" ]; then
 	# Move the extracted 'firefox' folder to 'firefox-dev'
 	sudo mv /opt/firefox /opt/firefox-dev
 
-	# 3. Create Symlink to the actual binary (/opt/firefox-dev/firefox)
-	sudo ln -sf /opt/firefox-dev/firefox /usr/local/bin/firefox-dev
+	# 3. Create wrapper script with MOZ_LEGACY_PROFILES to prevent profile-per-install
+	cat > "$HOME/.local/bin/firefox-dev" << 'EOF'
+#!/bin/bash
+export MOZ_LEGACY_PROFILES=1
+exec /opt/firefox-dev/firefox "$@"
+EOF
+	chmod +x "$HOME/.local/bin/firefox-dev"
 
 	# 4. Create Desktop Entry
 	echo "Creating desktop entry..."
@@ -79,7 +84,7 @@ if [ ! -f "/opt/firefox-dev/firefox" ]; then
 [Desktop Entry]
 Name=Firefox Developer Edition
 GenericName=Web Browser
-Exec=/usr/local/bin/firefox-dev %u
+Exec=env MOZ_LEGACY_PROFILES=1 /opt/firefox-dev/firefox %u
 Terminal=false
 Type=Application
 Icon=/opt/firefox-dev/browser/chrome/icons/default/default128.png
