@@ -5,6 +5,7 @@
 
 DAEMON="$HOME/.local/bin/timer-daemon"
 PRESET_FILE="${TIMER_PRESETS_FILE:-$HOME/.config/timers/presets}"
+LOG_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/timer-daemon.log"
 
 send() {
 	"$DAEMON" "$@"
@@ -101,7 +102,8 @@ for t in data.get("timers", []):
     print(f"Cancel: {label}")
 ')
 
-menu="New Timer"
+menu="New Timer
+View History"
 [ -n "$presets" ] && menu="$menu
 ── Presets ──
 $presets"
@@ -111,8 +113,72 @@ $active"
 
 choice=$(printf '%s\n' "$menu" | rofi -dmenu -p "Timer")
 
+show_history() {
+	# Show run history (newest first) in a read-only rofi view.
+	# Arg $1: "View History" or "History: ..." — "View History" prompts for scope.
+	scope="$1"
+	if [ -z "$scope" ] || [ "$scope" = "View History" ]; then
+		scope=$(printf 'History: Today\nHistory: All (last 100)\n' | rofi -dmenu -p "History")
+		[ -z "$scope" ] && return 0
+	fi
+	if [ ! -f "$LOG_FILE" ]; then
+		notify-send "Timer" "No history yet"
+		return 0
+	fi
+	LOG_FILE="$LOG_FILE" SCOPE="$scope" python3 <<'PYEOF' | rofi -dmenu -p "Runs" -no-custom
+import json, os
+from datetime import date
+log = os.environ.get("LOG_FILE", "")
+scope = os.environ.get("SCOPE", "History: All (last 100)")
+today = date.today().isoformat()
+starts = []
+try:
+    with open(log) as f:
+        for line in f:
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if e.get("event") != "start":
+                continue
+            starts.append(e)
+except OSError:
+    pass
+if scope.startswith("History: Today"):
+    starts = [e for e in starts if e.get("ts", "").startswith(today)]
+else:
+    starts = starts[-100:]
+starts.reverse()
+def fmt_dur(s):
+    try:
+        s = int(s)
+    except (TypeError, ValueError):
+        return "?"
+    h, r = divmod(s, 3600)
+    m, sec = divmod(r, 60)
+    if h and m:
+        return f"{h}h{m}m"
+    if h:
+        return f"{h}h"
+    if m and sec:
+        return f"{m}m{sec}s"
+    if m:
+        return f"{m}m"
+    return f"{sec}s"
+total = sum(int(e.get("duration", 0) or 0) for e in starts)
+print(f"Today: {len(starts)} runs" if scope.startswith("History: Today") else f"Last {len(starts)} runs, {fmt_dur(total)} total")
+for e in starts:
+    ts = e.get("ts", "")[:16].replace("T", " ")
+    label = e.get("label") or "timer"
+    print(f"{ts}  {label}  {fmt_dur(e.get('duration', 0))}")
+PYEOF
+}
+
 case "$choice" in
 "" ) exit 0 ;;
+"View History"|"History: "*)
+	show_history "$choice"
+	;;
 "New Timer")
 	# ask for minutes (or seconds with an "s" suffix)
 	dur_input=$(rofi -dmenu -p "Duration (1h, 20m, 90s, 25 = minutes)")
