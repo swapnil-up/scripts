@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
+import argparse
+import glob
 import os
 import json
+import re
 import sqlite3
 import time
 import subprocess
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from ebooklib import epub
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
@@ -19,8 +22,18 @@ CHROMIUM_DATA_DIR = os.path.join(BASE_DIR, ".browser_profile_chromium")
 SESSION_PATH = os.path.join(BASE_DIR, "session.json")
 # Exact Chrome-for-Testing binary that agent-tools/get-session uses, so the
 # browser fingerprint that earns cf_clearance matches the replay browser.
-PUPPETEER_CHROME = os.path.expanduser(
-    "~/.cache/puppeteer/chrome/linux-151.0.7922.47/chrome-linux64/chrome")
+# Puppeteer upgrades this path on every install, so resolve it dynamically
+# instead of hardcoding a version: a stale path silently falls back to
+# Playwright's bundled Chromium, whose fingerprint Cloudflare bounces in an
+# infinite "verify you are human" loop.
+def _find_puppeteer_chrome():
+    candidates = sorted(
+        glob.glob(os.path.expanduser("~/.cache/puppeteer/chrome/*/chrome-linux64/chrome")),
+        key=os.path.getmtime, reverse=True)
+    return candidates[0] if candidates else None
+
+
+PUPPETEER_CHROME = _find_puppeteer_chrome()
 
 
 def load_session(path=SESSION_PATH):
@@ -48,6 +61,23 @@ def launch_cloudflare_browser(p, headless=False):
     ONE visible window for the whole crawl; the user solves the challenge once
     in it, and the browser keeps its own valid cf_clearance for all chapters.
 Returns (browser, context, page)."""
+    # CRAWLER_CDP=http://127.0.0.1:9222 -> drive the USER's own browser over
+    # the DevTools protocol instead of launching an automated one. Needed on
+    # sites where Cloudflare loops an interactive challenge forever against
+    # automation but passes instantly in the real browser: the user solves the
+    # check once in their own window, and the crawl then rides that browser's
+    # fingerprint and cf_clearance.
+    cdp_url = os.environ.get("CRAWLER_CDP")
+    if cdp_url:
+        browser = p.chromium.connect_over_cdp(cdp_url)
+        context = browser.contexts[0] if browser.contexts else browser.new_context()
+        page = next((pg for pg in context.pages if pg.url.startswith("http")), None)
+        if page is None:
+            page = context.pages[0] if context.pages else context.new_page()
+        page.set_default_timeout(15000)
+        print(f"[CDP] Using user's browser at {cdp_url} (tab: {page.url})", flush=True)
+        return browser, context, page
+
     launch_opts = {
         "headless": headless,
         "args": [
@@ -180,7 +210,10 @@ def clean_html_content(raw_html):
     garbage_selectors = [
         "script", "style", "iframe", "ins", "button", 
         ".chapter-nav", ".ads", ".sharedaddy", ".wpcnt",
-        "nav", "header", "footer"
+        "nav", "header", "footer",
+        # Google AdSense in-page annotations ("Try Meditation", "Hire
+        # Babysitters", ...) injected into chapter paragraphs at render time.
+        "[class*='google-anno']", "[class*='goog-rentry']", "[id*='google-anno']",
     ]
     for selector in garbage_selectors:
         for tag in soup.select(selector):
@@ -206,6 +239,18 @@ def save_diagnostic(page, name):
         print(f"  [Diagnostic] Saved HTML to {html_path}")
     except Exception as e:
         print(f"  [Diagnostic] Failed to save diagnostics: {e}")
+
+_PREV_REF_RE = re.compile(r"(?:^|[^a-z])(prev(?:ious)?|back)(?:[^a-z]|$)", re.IGNORECASE)
+
+
+def looks_like_prev_ref(value):
+    """True when value reads as a 'previous' navigation reference.
+
+    Matches on word-ish boundaries so slugs such as 'vip-preview' or
+    'feedback' are not mistaken for prev links: substring matching stalled
+    the crawl at any chapter whose slug contained 'preview' or 'back'."""
+    return bool(_PREV_REF_RE.search(value or ""))
+
 
 def get_next_url(page, current_url, next_selector=None):
     """Extracts the 'Next' link using common selectors, avoiding 'Previous' links."""
@@ -279,15 +324,19 @@ def get_next_url(page, current_url, next_selector=None):
                         
                     text = el.inner_text().strip().lower()
                     # Hard-exclude common 'Previous' patterns
-                    if any(x in text for x in ["prev", "back", "上一章", "previous"]):
+                    if "上一章" in text or looks_like_prev_ref(text):
                         continue
-                    if any(x in href.lower() for x in ["prev", "back", "previous"]):
+                    if looks_like_prev_ref(href.lower()):
                         continue
                 
                 if href:
-                    parsed_url = urlparse(current_url)
-                    base_domain = f"{parsed_url.scheme}://{parsed_url.netloc}"
-                    new_url = base_domain + href if href.startswith("/") else href
+                    # Resolve against the page's post-redirect URL: sites like
+                    # easternwordsmith serve relative hrefs ("../chapter-next/1")
+                    # and bounce through a redirect, so the requested URL and the
+                    # real one differ. urljoin handles absolute, root-relative and
+                    # "../" hrefs; plain base+href left relative links unresolved.
+                    base_url = page.url if page.url.startswith("http") else current_url
+                    new_url = urljoin(base_url, href)
                     
                     # Smart AO3 handling: Append view_adult=true
                     if "archiveofourown.org" in new_url and "view_adult=true" not in new_url:
@@ -367,7 +416,7 @@ def handle_ao3_gate(page):
     
     return gate_found
 
-def scrape_incremental(book_id, start_url, selector, next_selector=None, target_chapter=None):
+def scrape_incremental(book_id, start_url, selector, next_selector=None, target_chapter=None, skip_preview=False):
     """Scrapes new chapters starting from the provided URL until target_chapter is reached."""
     new_chapters_count = 0
     current_url = start_url
@@ -470,7 +519,7 @@ def scrape_incremental(book_id, start_url, selector, next_selector=None, target_
                 pristine_html = clean_html_content(raw_content)
                 
                 # Preview for the first new chapter of the session
-                if new_chapters_count < 1:
+                if new_chapters_count < 1 and not skip_preview:
                     text_preview = BeautifulSoup(pristine_html, "html.parser").get_text().strip()
                     print("\n" + "="*50)
                     print(f"PREVIEW: {page_title}")
@@ -483,10 +532,15 @@ def scrape_incremental(book_id, start_url, selector, next_selector=None, target_
                         break
 
                 max_order += 1
+                # Store the post-redirect URL: on sites that route through
+                # "/chapter-next/123", current_url is the redirect stub while
+                # page.url is the real chapter URL. Storing page.url keeps the
+                # DB canonical so dedup/resume work.
+                stored_url = page.url if page.url.startswith("http") else current_url
                 with sqlite3.connect(DB_PATH) as conn:
                     cur = conn.execute(
                         "INSERT OR IGNORE INTO chapters (book_id, url, title, html_content, chapter_order) VALUES (?, ?, ?, ?, ?)",
-                        (book_id, current_url, page_title, pristine_html, max_order)
+                        (book_id, stored_url, page_title, pristine_html, max_order)
                     )
                     inserted = cur.rowcount > 0
 
@@ -514,7 +568,11 @@ def scrape_incremental(book_id, start_url, selector, next_selector=None, target_
                 print(f"Error parsing {current_url}: {e}")
                 break
         
-        browser.close()
+        if os.environ.get("CRAWLER_CDP"):
+            # CDP mode drives the user's own browser: detach, never kill it.
+            print("[CDP] Detaching; leaving your browser open.", flush=True)
+        else:
+            browser.close()
     return new_chapters_count
 
 def compile_epub(book_id, book_title):
@@ -558,7 +616,68 @@ def compile_epub(book_id, book_title):
     print(f"EPUB created: {epub_filename}")
     return epub_filename
 
+def update_all_books(target_book=None, skip_preview=False):
+    """Updates all books (or a specific one) to the latest chapters, then syncs with Calibre."""
+    init_db()
+    with sqlite3.connect(DB_PATH) as conn:
+        if target_book:
+            cursor = conn.execute(
+                "SELECT id, title, start_url, selector, next_selector FROM books WHERE title LIKE ?",
+                (f"%{target_book}%",)
+            )
+        else:
+            cursor = conn.execute("SELECT id, title, start_url, selector, next_selector FROM books")
+        books = cursor.fetchall()
+
+    if not books:
+        print("No books found to update.")
+        return
+
+    for book_id, book_title, start_url, selector, next_selector in books:
+        print(f"\n{'='*60}")
+        print(f"Updating: {book_title}")
+        print(f"{'='*60}")
+
+        with sqlite3.connect(DB_PATH) as conn:
+            res = conn.execute(
+                "SELECT url FROM chapters WHERE book_id = ? ORDER BY chapter_order DESC LIMIT 1",
+                (book_id,)
+            ).fetchone()
+            last_url = res[0] if res else start_url
+
+            count = conn.execute("SELECT COUNT(*) FROM chapters WHERE book_id = ?", (book_id,)).fetchone()[0]
+
+        print(f"  Current chapters: {count}")
+        print(f"  Last URL: {last_url}")
+
+        new_count = scrape_incremental(book_id, last_url, selector, next_selector, skip_preview=skip_preview)
+
+        if new_count > 0:
+            print(f"  Fetched {new_count} new chapters. Compiling EPUB...")
+            epub_path = compile_epub(book_id, book_title)
+            if epub_path:
+                sync_with_calibre(book_title, epub_path)
+            print(f"  Done: {book_title}")
+        else:
+            print(f"  No new chapters for '{book_title}'.")
+
+    print(f"\n{'='*60}")
+    print("All updates complete.")
+
 def main():
+    parser = argparse.ArgumentParser(description="Multi-Chapter Novel Scraper & Digest")
+    parser.add_argument("--update-all", action="store_true",
+                        help="Update all books to latest chapters (non-interactive)")
+    parser.add_argument("--book", type=str, default=None,
+                        help="Update a specific book by title (partial match)")
+    parser.add_argument("--yes", "-y", action="store_true",
+                        help="Skip preview confirmation prompts")
+    args = parser.parse_args()
+
+    if args.update_all or args.book:
+        update_all_books(target_book=args.book, skip_preview=args.yes)
+        return
+
     init_db()
     print("=== Multi-Chapter Novel Scraper & Digest ===")
     
