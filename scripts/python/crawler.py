@@ -131,6 +131,30 @@ def wait_for_challenge_clear(page, selector, timeout=120):
     return page.locator(selector).first.count() > 0
 
 
+def wait_for_content_settle(page, selector, min_len=300, timeout=12.0):
+    """Wait until the selected text stops growing.
+
+    SPA chapter pages (dawn-translations) mount the container immediately and
+    fill it a moment later, so a bare wait_for_selector can capture a
+    header-only shell. Poll until the extracted text is substantial and stable.
+    Short chapters below min_len simply burn the timeout and continue."""
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            n = len(page.locator(selector).first.inner_text(timeout=2000).strip())
+        except Exception:
+            n = 0
+        if n >= min_len:
+            time.sleep(0.4)
+            try:
+                n2 = len(page.locator(selector).first.inner_text(timeout=2000).strip())
+            except Exception:
+                n2 = n
+            if abs(n2 - n) <= max(50, n // 50):
+                return
+        time.sleep(0.4)
+
+
 def fetch_chapter_content(page, url, selector, total_budget=1800):
     """Navigates to url and waits for the content selector, tolerating both
     navigation timeouts and Cloudflare challenges.
@@ -153,6 +177,7 @@ def fetch_chapter_content(page, url, selector, total_budget=1800):
 
         try:
             page.wait_for_selector(selector, timeout=15000)
+            wait_for_content_settle(page, selector)
             return True
         except Exception:
             pass
@@ -266,6 +291,20 @@ def get_next_url(page, current_url, next_selector=None):
         time.sleep(0.5)
     except:
         pass
+
+    # Some sites (dawn-translations.com, numeric chapter URLs) navigate only
+    # via icon <button>s with no href, so there is no anchor to read. The
+    # special selector value "increment" derives the next URL from the current
+    # one by bumping its trailing chapter number.
+    if (next_selector or "").strip().lower() in ("increment", "+1"):
+        m = re.search(r"(\d+)(?!.*\d)", current_url)
+        if not m:
+            return None
+        new_url = current_url[:m.start()] + str(int(m.group(1)) + 1) + current_url[m.end():]
+        if new_url.split("#")[0].split("?")[0] == current_url.split("#")[0].split("?")[0]:
+            return None
+        print(f"  Incremented Next Link: {new_url}")
+        return new_url
 
     candidates = []
     if next_selector:
