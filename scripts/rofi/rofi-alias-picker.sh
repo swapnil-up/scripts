@@ -3,7 +3,7 @@
 
 entries=(
   "bootstrap:~/github/scripts/setup/bootstrap.sh:run full bootstrap"
-  "review:python3 ~/github/obsidian-vault/scripts/incremental.py:obsidian incremental review"
+  "revisit:python3 ~/github/obsidian-vault/scripts/tend.py --revisit:revisit due notes"
   "whisper:~/github/scripts/scripts/utils/whisper.sh:speech-to-text (hold to record)"
   "piper:~/github/scripts/scripts/utils/piper.sh:text-to-speech (clipboard)"
   "crawler:~/github/scripts/scripts/python/crawler.py:web crawler"

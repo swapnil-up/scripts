@@ -1,8 +1,8 @@
-# Reflection Review — tending and spaced repetition
+# Reflection Review — tending and spaced editing
 
 ## The problem
 
-Notes get written and never revisited. The act of writing locks in a single pass of thinking, but the best ideas need repeated engagement to compound. This system keeps important thoughts moving by combining link-aware tending with optional Anki-style spaced repetition.
+Notes get written and never revisited. The act of writing locks in a single pass of thinking, but the best ideas need repeated engagement to compound. This system keeps important thoughts moving with two loops: connect related notes, then revisit and revise the notes themselves.
 
 ## `tend.py` — the on-demand tending loop
 
@@ -33,11 +33,48 @@ python3 scripts/tend.py --index-info
 # Only notes with no outgoing links
 python3 scripts/tend.py --links
 
+# Revisit notes that are due for revision
+python3 scripts/tend.py --revisit
+
 # Backlog cleanup: keep, merge, archive, delete
 python3 scripts/tend.py --triage
 ```
 
-The dashboard surfaces notes with link debt, neglect, shortness, empty files, unlinked mentions, and duplicate candidates. `tend.py` can update `status` and `reviewed` in frontmatter and, after confirmation, insert links either in place or under a `## Related` heading.
+The dashboard surfaces notes due for revisit, link debt, neglect, shortness, empty files, unlinked mentions, and duplicate candidates. `tend.py` can update `status` and review state in frontmatter and, after confirmation, insert links either in place or under a `## Related` heading.
+
+### Revisiting
+
+`tend --revisit` is the spaced-editing loop. It selects overdue or never-scheduled notes, shows the note's age, review state, and links, and offers:
+
+```
+[o]pen [a]ppend [r]elate [s]oon [l]ater [b]ury [x]archive [d]elete [n]ext [q]uit
+```
+
+- **open** launches the editor. After editing, you are asked to schedule the next revisit.
+- **append** adds a dated `## Revisit YYYY-MM-DD` heading before opening, so each pass can leave a trace. Good prompts: *What still holds? What changed? What would you cut?*
+- **relate** runs the normal link suggestions without leaving the revisit session.
+- **soon / later** schedule from the current interval. **bury** moves the next revisit to tomorrow without increasing the review count.
+- Notes in `unfinished/` that reach 350 words are promoted to `Reflections/` automatically.
+
+Scheduling is stored in frontmatter, so it travels with the note through merges and renames:
+
+| Field | Meaning |
+|-------|---------|
+| `reviewed` | Last date the note was actually revisited |
+| `review_next` | Next due date |
+| `review_interval` | Current gap in days |
+| `review_ease` | Multiplier for longer intervals, starts at 2.5 |
+| `review_count` | Number of completed revisits |
+
+The schedule is deliberately simple:
+
+| Completed revisits | Soon | Later |
+|--------------------|------|-------|
+| 0 | 1 day | 7 days |
+| 1 | 3 days | 21 days |
+| 2+ | interval × 1.5 | interval × ease |
+
+`soon` lowers ease by 0.15 (minimum 1.3); `later` raises it by 0.10 (maximum 3.2). Notes without `review_next` are due, including all notes written before this loop existed. The legacy `.reflections_queue.json` tracker is no longer read; frontmatter is authoritative.
 
 ### Semantic mode
 
@@ -72,17 +109,19 @@ alias tend='python3 ~/github/obsidian-vault/scripts/tend.py'
 alias tend-lex='python3 ~/github/obsidian-vault/scripts/tend.py --no-semantic'
 ```
 
+On i3, press `$mod+d` and choose `,tend` to open the Tend menu: revisit due notes, link notes, audit, triage, refresh the dashboard, or open it in Obsidian.
+
 `tend.py` does not require the Obsidian plugins. Use Obsidian's core Backlinks → Unlinked mentions pane alongside it.
 
 ## Workflow
 
 The workflow is intentionally low-friction:
 
-1. **Tend a few notes.** Run `tend` (or `tend --links` to focus on notes with no outgoing links). Review a suggestion, link it, or dismiss it.
-2. **Use the dashboard as a menu, not a debt collector.** `Reflections/Tending.md` surfaces unlinked mentions, semantic neighbors, duplicates, empty/template-only notes, and neglected notes. It refreshes on run and on quit.
-3. **Audit occasionally.** `tend --stats` is read-only. `tend --triage` is for backlog cleanup.
-4. **Use Obsidian core for browsing.** Backlinks → Unlinked mentions, graph view with the orphan filter, and random note are enough. No plugins required.
-5. **Use spaced repetition only if you want it.** `incremental.py` remains available for Anki-style review; the linking workflow does not depend on it.
+1. **Connect a few notes.** Run `tend` (or `tend --links` to focus on notes with no outgoing links). Review a suggestion, link it, or dismiss it.
+2. **Revise a few notes.** Run `tend --revisit` for notes that are due. Open, append, link, schedule, or archive. The goal is a small number of real edits, not clearing a queue.
+3. **Use the dashboard as a menu, not a debt collector.** `Reflections/Tending.md` surfaces due revisions, unlinked mentions, semantic neighbors, duplicates, empty/template-only notes, and neglected notes. It refreshes on run and on quit.
+4. **Audit occasionally.** `tend --stats` is read-only. `tend --triage` is for backlog cleanup.
+5. **Use Obsidian core for browsing.** Backlinks → Unlinked mentions, graph view with the orphan filter, and random note are enough. No plugins required.
 
 ## What we're building
 
@@ -91,43 +130,30 @@ The direction is deliberately incremental:
 1. **Direct essay-to-essay links first.** MOCs and concept notes are optional and should emerge only when a cluster of notes has earned one.
 2. **Hybrid suggestions.** Exact mentions, title patterns, and shared terms provide precision and evidence. Local embeddings provide recall for paraphrases and non-obvious connections. Nothing is linked without confirmation.
 3. **Noise control before automation.** Template-aware cleaning removes boilerplate; template-only notes are skipped by the index; dismissed pairs are remembered. The goal is fewer, better suggestions, not maximum coverage.
-4. **Local-first.** Embeddings run locally, the index is disposable, and feedback is a small committed JSON file. No API key is required.
-5. **RAG later, as a layer.** The next useful addition is an optional local-LLM reranker/explainer over retrieved candidates ("these agree", "these contradict", "this is the same idea"). Retrieval and the snippet remain the source of truth.
-6. **MOCs after the graph is denser.** Once there are enough direct links, cluster the graph and propose MOCs rather than inventing them up front.
-7. **Further out:** link-health checks, better duplicate merging, and an evaluation loop for accepted vs dismissed suggestions.
+4. **Spaced editing, not just spaced recall.** Revisit scheduling lives in frontmatter; each pass should change, sharpen, or retire the note.
+5. **Local-first.** Embeddings run locally, the index is disposable, and feedback is a small committed JSON file. No API key is required.
+6. **RAG later, as a layer.** The next useful addition is an optional local-LLM reranker/explainer over retrieved candidates ("these agree", "these contradict", "this is the same idea"). Retrieval and the snippet remain the source of truth.
+7. **MOCs after the graph is denser.** Once there are enough direct links, cluster the graph and propose MOCs rather than inventing them up front.
+8. **Further out:** link-health checks, better duplicate merging, and an evaluation loop for accepted vs dismissed suggestions.
 
 The index cache is derived state. Do not commit it. The feedback file is the only link-quality state worth preserving across machines.
 
-## The spaced-repetition scripts
+## Legacy scripts
 
-### `incremental.py` — the review loop
+These remain in the repo because they are still useful, but they are no longer the primary review loop.
 
-The daily driver. Opens an interactive terminal session that:
+### `incremental.py` — old SM-2 review session
 
-1. Picks a note biased by how overdue it is, whether it's unfinished (<350 words, gets 2.5x priority), and whether it's never been reviewed (+3 recency boost)
-2. Shows you the title, lets you open in nvim, bury it to tomorrow, skip, or quit
-3. After editing, you rate the note **soon** (important, want to engage more) or **later** (not as important)
-4. Scheduling follows an SM-2 inspired curve:
+An older standalone review script with its own `.reflections_queue.json` tracker. `tend --review` now runs the unified revisit loop instead. Use this only if you specifically want the old SM-2 behavior; its schedule is not connected to the frontmatter state used by `tend`.
 
-| Reps | Soon | Later |
-|------|------|-------|
-| 0 (first real rating) | 1 day | 7 days |
-| 1 | 3 days | 21 days |
-| 2+ | interval × 1.5 | interval × 3.0 |
-
-- Ease factor drifts up (+0.1) on Soon, down (−0.15) on Later
-- If a note from `unfinished/` reaches 350+ words after editing, it's auto-promoted to `Reflections/` with a fresh schedule
-- **Bury** ([b]) defers to tomorrow without touching the schedule — like Anki's bury
-- First review is always a 1-day fast nudge regardless of rating, to get acquainted
-
-### `move_unfinished.py` — the batch utility
+### `move_unfinished.py` — batch folder utility
 
 Scans both directories and moves notes across the 350-word threshold:
 
 - `Reflections/` → `unfinished/` if under 350 words
 - `unfinished/` → `Reflections/` if 350+ words
 
-Also rekeys the tracker so scheduling history isn't lost. Run this occasionally (or after importing a batch of notes) to keep the folders aligned.
+Also rekeys the old tracker. Run this occasionally (or after importing a batch of notes) to keep the folders aligned. `tend --revisit` also promotes notes it edits past 350 words.
 
 ## How the folders work
 
@@ -136,22 +162,16 @@ Also rekeys the tracker so scheduling history isn't lost. Run this occasionally 
 | `Reflections/` | Finished, substantial writing | 350+ words |
 | `unfinished/` | Seeds, fragments, half-thoughts | <350 words |
 
-The unfinished notes get a 2.5x priority multiplier in selection, so they surface more often. The goal is to expand each one to 350 words through repeated engagement, then auto-promote it to Reflections.
-
-- `last_reviewed` — when you last rated the note
-- `next_review` — when it's due again
-- `interval` — current gap in days (grows unbounded)
-- `ease_factor` — Anki-style multiplier, starts at 2.5
-- `repetitions` — successful review count
-- `first_reviewed` — set on first rating (triggers the fast nudge)
-- `is_unfinished` — whether the file lives in `unfinished/`
-- `bury_count` — how many times you've deferred it (no schedule impact)
+The goal is to expand each unfinished note to 350 words through repeated engagement, then let `tend --revisit` promote it to `Reflections/`. Shorter notes get a priority boost during revisit selection.
 
 ## Workflow
 
 ```
-# Daily review session
-python3 scripts/incremental.py
+# Connect notes
+python3 scripts/tend.py
+
+# Revisit and revise what is due
+python3 scripts/tend.py --revisit
 
 # After importing a batch of new notes, realign folders
 python3 scripts/move_unfinished.py

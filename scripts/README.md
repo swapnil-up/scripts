@@ -30,5 +30,8 @@ Most scripts are called directly or via keybinding (i3/espanso).
 ## Integration
 
 - `anki-piper.sh`: triggered by i3 `$mod+o`, captures highlighted text
-- `rofi-smart-launcher.sh`: triggered by i3 `$mod+d`
+- `rofi-smart-launcher.sh`: triggered by i3 `$mod+d`; apps, comma commands, and aliases
+  - `,tend` opens the tending menu; other aliases include `,bootstrap`, `,crawler`, `,k`, `,docker-clean`, `,clickpaste`
+  - `,w gh cats` searches GitHub; `,w yt cats` YouTube; `,w wiki nepal` Wikipedia
+- `rofi-tend-menu.sh`: opened from `$mod+d` via `,tend`; Obsidian tending, revisits, audits, and dashboard
 - `piper.sh`/`whisper.sh`: use ~/github/piper_tts for TTS

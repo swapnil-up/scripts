@@ -9,11 +9,7 @@ import time
 from pathlib import Path
 from configparser import ConfigParser
 from datetime import datetime
-
-try:
-    from rapidfuzz import fuzz
-except ImportError:
-    fuzz = None
+from urllib.parse import quote_plus
 
 CACHE_DIR = Path.home() / ".cache/rofi-launcher"
 APPS_CACHE = CACHE_DIR / "apps.json"
@@ -27,16 +23,83 @@ DESKTOP_DIRS = [
 ]
 
 CACHE_TTL = 3600  # seconds
+APPS_CACHE_VERSION = 2
+
+COMMANDS = [
+    ("Run shell command", "./"),
+    ("Toggle todo", ",tt"),
+    ("Add todo", ",t"),
+    ("Remove todo", ",tr"),
+    ("Archive completed todos", ",ta"),
+    ("Set / cancel timer", ",timer"),
+    ("New note", ",n"),
+    ("New TIL", ",til"),
+    ("New why note", ",why"),
+    ("Append to hmm", ",hmm"),
+    ("Log annoyance", ",mf"),
+    ("Web search (gh/yt/lb/wiki)", ",w"),
+    ("Text to speech", ",piper"),
+    ("Speech to text", ",whisper"),
+    ("Audio transcribe", ",at"),
+]
+
+ALIASES = [
+    {
+        "key": "tend",
+        "label": "Tend notes",
+        "mode": "picker",
+        "cmd": "~/github/scripts/scripts/rofi/rofi-tend-menu.sh",
+    },
+    {
+        "key": "bootstrap",
+        "label": "Run full bootstrap",
+        "mode": "terminal",
+        "cmd": "~/github/scripts/setup/bootstrap.sh",
+    },
+    {
+        "key": "crawler",
+        "label": "Web crawler",
+        "mode": "terminal",
+        "cmd": "python3 ~/github/scripts/scripts/python/crawler.py",
+    },
+    {
+        "key": "k",
+        "label": "Restart kanata",
+        "mode": "quiet",
+        "cmd": "systemctl --user restart kanata",
+    },
+    {
+        "key": "docker-clean",
+        "label": "Prune docker",
+        "mode": "terminal",
+        "cmd": "docker container prune -f; docker image prune -f; docker network prune -f; docker volume prune -f",
+    },
+    {
+        "key": "clickpaste",
+        "label": "Type clipboard",
+        "mode": "detached",
+        "cmd": "notify-send 'Clickpaste' 'Typing clipboard in 3 seconds'; sleep 3; xdotool type \"$(xclip -o -selection clipboard)\"",
+    },
+]
+
+
+def entry_display(label, alias):
+    return f"{label:<34} {alias}"
+
+
+def alias_display(alias):
+    return entry_display(alias["label"], f",{alias['key']}")
 
 
 def index_apps():
     apps = []
+    seen = set()
 
     for base in DESKTOP_DIRS:
         if not base.exists():
             continue
 
-        for path in base.glob("*.desktop"):
+        for path in sorted(base.glob("*.desktop")):
             cp = ConfigParser(interpolation=None)
             try:
                 cp.read(path)
@@ -56,7 +119,10 @@ def index_apps():
 
             if not name or not exec_cmd:
                 continue
+            if exec_cmd.strip() == "/usr/bin/false" or name in seen:
+                continue
 
+            seen.add(name)
             apps.append(
                 {
                     "name": name,
@@ -64,7 +130,7 @@ def index_apps():
                 }
             )
 
-    return apps
+    return sorted(apps, key=lambda app: app["name"].casefold())
 
 
 def load_apps():
@@ -73,35 +139,30 @@ def load_apps():
     if APPS_CACHE.exists():
         age = time.time() - APPS_CACHE.stat().st_mtime
         if age < CACHE_TTL:
-            return json.loads(APPS_CACHE.read_text())
+            try:
+                cached = json.loads(APPS_CACHE.read_text())
+            except (OSError, ValueError):
+                cached = None
+            if (
+                isinstance(cached, dict)
+                and cached.get("version") == APPS_CACHE_VERSION
+                and isinstance(cached.get("apps"), list)
+            ):
+                return cached["apps"]
 
     apps = index_apps()
-    APPS_CACHE.write_text(json.dumps(apps))
+    APPS_CACHE.write_text(
+        json.dumps({"version": APPS_CACHE_VERSION, "apps": apps})
+    )
     return apps
 
 
 def build_candidates():
     items = ["Terminal"]
 
-    # commands
-    items += [
-        "./           <cmd>",
-        ",tt          toggle todo",
-        ",t",
-        ",tr          remove todo",
-        ",timer       set / cancel countdown",
-        # ",p",
-        ",n",
-        ",til",
-        ",why",
-        ",hmm",
-        ",mf",
-        ",w <q>    search the web gh, yt, lb, wiki",
-        ",piper      text to speech (clipboard)",
-        ",whisper    speech to text (record)",
-        ",at         audio transcribe + clean",
-    ]
-
+    items += [entry_display(label, alias) for label, alias in COMMANDS]
+    items.append("---")
+    items += [alias_display(alias) for alias in ALIASES]
     items.append("---")
 
     # apps
@@ -111,31 +172,46 @@ def build_candidates():
     return items
 
 
-def score(query, candidate):
-    query = query.lower()
-    candidate_lower = candidate.lower()
-
-    if query == candidate_lower:
-        return 100
-    elif all(word in candidate_lower for word in query.split()):
-        return 90
-    elif candidate_lower.startswith(query):
-        return 80
-    elif fuzz:
-        return fuzz.partial_ratio(query, candidate)
-    else:
-        return 0
-
-
-def filter_and_rank(query, items):
-    scored = [(score(query, i), i) for i in items]
-    return [i for s, i in sorted(scored, reverse=True) if s > 0]
-
-
 def output_menu():
     items = build_candidates()
     for item in items:
         print(item)
+
+
+def launch_terminal(title, command, hold=True):
+    term = os.environ.get("TERMINAL")
+    if not term:
+        term = "alacritty" if shutil.which("alacritty") else "x-terminal-emulator"
+    suffix = "; echo; read -rp 'Press Enter to close.'" if hold else ""
+    subprocess.Popen(
+        [
+            term,
+            "--title",
+            title,
+            "-e",
+            "bash",
+            "-lc",
+            f"{os.path.expanduser(command)}{suffix}",
+        ]
+    )
+
+
+def run_alias(alias):
+    cmd = os.path.expanduser(alias["cmd"])
+    mode = alias["mode"]
+
+    if mode == "picker":
+        subprocess.Popen(["bash", "-lc", cmd])
+    elif mode == "terminal":
+        launch_terminal(f"Alias — {alias['label']}", cmd)
+    elif mode == "quiet":
+        result = subprocess.run(cmd, shell=True, executable="/bin/bash")
+        if result.returncode:
+            subprocess.run(["notify-send", "-u", "critical", alias["label"], "Command failed"])
+        else:
+            subprocess.run(["notify-send", alias["label"]])
+    else:
+        subprocess.Popen(cmd, shell=True, executable="/bin/bash")
 
 
 def dispatch(raw):
@@ -144,7 +220,32 @@ def dispatch(raw):
 
     raw = raw.strip()
 
+    for alias in ALIASES:
+        if raw == alias_display(alias):
+            run_alias(alias)
+            return
+
+    command = dict(
+        (entry_display(label, alias), alias) for label, alias in COMMANDS
+    ).get(raw)
+    if command:
+        raw = command
+
+    # Strip descriptions from older command rows.
+    if raw.startswith(",") and " — " in raw:
+        raw = raw.split(" — ", 1)[0].strip()
+
     # 1. SHELL MODE
+    if raw == "./":
+        typed = subprocess.run(
+            ["rofi", "-dmenu", "-p", "Shell command…", "-lines", "0"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if not typed:
+            return
+        handle_bash(typed)
+        return
     if raw.startswith("./"):
         cmd = raw[2:].strip()  # Strip the './'
         handle_bash(cmd)
@@ -216,7 +317,19 @@ def handle_command(base, sub, rest):
         log_annoying()
 
     elif base == "w":
-        q = rest.replace(" ", "+")
+        if not rest:
+            rest = subprocess.run(
+                ["rofi", "-dmenu", "-p", "Search web…", "-lines", "0"],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            if not rest:
+                return
+        if sub is None and " " in rest:
+            first, remainder = rest.split(" ", 1)
+            if first in {"gh", "yt", "lb", "wiki"}:
+                sub, rest = first, remainder
+        q = quote_plus(rest)
         if sub == "gh":
             url = f"https://github.com/search?q={q}"
         elif sub == "yt":
@@ -228,26 +341,20 @@ def handle_command(base, sub, rest):
         else:
             url = f"https://google.com/search?q={q}"
 
-        subprocess.run(["firefox-dev", url])
+        browser = shutil.which("firefox-dev") or shutil.which("firefox")
+        if browser:
+            subprocess.run([browser, url])
+        else:
+            subprocess.run(["xdg-open", url])
 
     elif base == "piper":
-        term = os.environ.get("TERMINAL", "x-terminal-emulator")
-        subprocess.run(
-            [term, "-e", "bash", "-c", "~/github/scripts/scripts/utils/piper.sh"]
-        )
+        launch_terminal("Piper TTS", "~/github/scripts/scripts/utils/piper.sh")
 
     elif base == "whisper":
-        term = os.environ.get("TERMINAL", "x-terminal-emulator")
-        subprocess.run(
-            [term, "-e", "bash", "-c", "~/github/scripts/scripts/utils/whisper.sh"]
-        )
+        launch_terminal("Whisper STT", "~/github/scripts/scripts/utils/whisper.sh")
 
     elif base == "at":
-        term = os.environ.get("TERMINAL", "x-terminal-emulator")
-        subprocess.run(
-            [term, "-e", "bash", "-c",
-             "~/github/scripts/scripts/audio-transcribe.sh"]
-        )
+        launch_terminal("Audio transcribe", "~/github/scripts/scripts/audio-transcribe.sh")
 
     else:
         subprocess.run(["notify-send", "Unknown command", f",{base}"])

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tend personal notes: audit, dashboard, hybrid link suggestions, and guided sessions."""
+"""Tend personal notes: audit, dashboard, link suggestions, and scheduled revisits."""
 
 import argparse
 import difflib
@@ -16,7 +16,7 @@ import sys
 import urllib.parse
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 try:
@@ -56,6 +56,7 @@ EXCLUDED_DIRS = {
     "node_modules",
 }
 SPECIAL_REVIEW_FILES = {"Tending.md"}
+DEFAULT_REVIEW_EASE = 2.5
 
 WIKILINK_RE = re.compile(r"\[\[([^\]\n]+?)\]\]")
 FM_RE = re.compile(r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.S)
@@ -116,6 +117,25 @@ class Suggestion:
     matched: str = ""
     score: float = 0.0
     evidence: str = ""
+
+
+@dataclass
+class ReviewState:
+    reviewed: date | None
+    next_date: date | None
+    interval: int
+    ease: float
+    count: int
+
+    @property
+    def due(self):
+        return self.next_date is None or self.next_date <= TODAY
+
+    @property
+    def overdue_days(self):
+        if self.next_date is None:
+            return 0
+        return max((TODAY - self.next_date).days, 0)
 
 
 def feedback_path():
@@ -220,6 +240,98 @@ def as_date(value):
         except ValueError:
             return None
     return None
+
+
+def as_int(value, default=0):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def review_state(note):
+    fields = note.frontmatter
+    ease = fields.get("review_ease")
+    try:
+        ease = float(ease)
+    except (TypeError, ValueError):
+        ease = DEFAULT_REVIEW_EASE
+    return ReviewState(
+        reviewed=as_date(fields.get("reviewed")),
+        next_date=as_date(fields.get("review_next")),
+        interval=max(as_int(fields.get("review_interval")), 0),
+        ease=min(max(ease, 1.3), 3.2),
+        count=max(as_int(fields.get("review_count")), 0),
+    )
+
+
+def review_due(note):
+    return note.status != "archived" and review_state(note).due
+
+
+def review_reason(note):
+    state = review_state(note)
+    if state.next_date is None:
+        return "never scheduled" if state.reviewed is None else "no next review"
+    if state.next_date > TODAY:
+        return f"review in {(state.next_date - TODAY).days} days"
+    overdue = state.overdue_days
+    return "due today" if overdue == 0 else f"overdue by {overdue} days"
+
+
+def schedule_review(note, rating):
+    if rating not in {"soon", "later"}:
+        return
+    state = review_state(note)
+    if rating == "soon":
+        if state.count == 0:
+            days = 1
+        elif state.count == 1:
+            days = 3
+        else:
+            days = max(1, round(state.interval * 1.5))
+        ease = max(1.3, state.ease - 0.15)
+    else:
+        if state.count == 0:
+            days = 7
+        elif state.count == 1:
+            days = 21
+        else:
+            days = max(7, round(state.interval * state.ease))
+        ease = min(3.2, state.ease + 0.1)
+
+    next_date = TODAY + timedelta(days=days)
+    updates = {
+        "reviewed": TODAY.isoformat(),
+        "review_next": next_date.isoformat(),
+        "review_interval": days,
+        "review_ease": f"{ease:.2f}",
+        "review_count": state.count + 1,
+    }
+    update_frontmatter(note.path, updates)
+    note.frontmatter.update({key: str(value) for key, value in updates.items()})
+    note.reviewed = TODAY
+    label = "soon" if rating == "soon" else "later"
+    print(f"  scheduled {label}: next review in {days} day{'s' if days != 1 else ''} ({next_date.isoformat()})")
+
+
+def snooze_review(note, days=1):
+    next_date = TODAY + timedelta(days=days)
+    update_frontmatter(note.path, {"review_next": next_date.isoformat()})
+    note.frontmatter["review_next"] = next_date.isoformat()
+    print(f"  snoozed until {next_date.isoformat()}")
+
+
+def append_revisit_scaffold(note):
+    heading = f"## Revisit {TODAY.isoformat()}"
+    if heading in note.body:
+        print("  a revisit section already exists for today")
+        return
+    new_body = note.body.rstrip() + f"\n\n{heading}\n\n"
+    replace_body(note.path, new_body)
+    note.body = new_body
+    note.words = word_count(new_body)
+    print(f"  appended {heading}")
 
 
 def split_frontmatter(raw):
@@ -607,8 +719,8 @@ def needs_reason(note):
     days = (TODAY - note.last_touched).days
     if days >= 60:
         reasons.append(f"untouched for {days} days")
-    if not note.reviewed:
-        reasons.append("never reviewed")
+    if review_due(note):
+        reasons.append("revisit: " + review_reason(note))
     return reasons or ["due for a look"]
 
 
@@ -640,6 +752,30 @@ def ranked_notes(notes, limit=None):
     return ranked[:limit] if limit else ranked
 
 
+def revisit_score(note, rng):
+    state = review_state(note)
+    score = 0.0
+    if state.reviewed is None:
+        score += 3
+    if state.next_date is None:
+        score += 2
+    else:
+        score += min(state.overdue_days / 3, 10)
+    if note.words < 150:
+        score += 1.5
+    if note.status in {"unset", "seed"}:
+        score += 0.5
+    score += rng.uniform(0, 1.5)
+    return score
+
+
+def ranked_revisit_notes(notes, limit=None):
+    rng = random.Random(TODAY.toordinal() + 17)
+    candidates = [note for note in notes.values() if review_due(note)]
+    ranked = sorted(candidates, key=lambda note: revisit_score(note, rng), reverse=True)
+    return ranked[:limit] if limit else ranked
+
+
 def status_counts(notes):
     counts = Counter(note.status or "unset" for note in notes.values())
     return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
@@ -652,6 +788,12 @@ def stats_payload(notes, mentions, duplicates):
     no_out = sum(1 for note in notes.values() if not note.outlinks)
     no_in = sum(1 for note in notes.values() if not note.inlinks)
     empty = sum(1 for note in notes.values() if note.words == 0)
+    reviewed = sum(1 for note in notes.values() if review_state(note).reviewed)
+    due = sum(1 for note in notes.values() if review_due(note))
+    never_reviewed = sum(
+        1 for note in notes.values()
+        if note.status != "archived" and review_state(note).reviewed is None
+    )
     return {
         "total": total,
         "linked": linked,
@@ -660,6 +802,9 @@ def stats_payload(notes, mentions, duplicates):
         "no_out": no_out,
         "no_in": no_in,
         "empty": empty,
+        "reviewed": reviewed,
+        "due": due,
+        "never_reviewed": never_reviewed,
         "mentions": len(mentions),
         "duplicates": len(duplicates),
         "statuses": status_counts(notes),
@@ -673,7 +818,10 @@ def print_stats(notes, mentions, duplicates):
         table.add_column("Metric", style="bold")
         table.add_column("Value", justify="right")
         for label, key in (
-            ("Notes reviewed", "total"),
+            ("Notes", "total"),
+            ("Reviewed at least once", "reviewed"),
+            ("Never reviewed", "never_reviewed"),
+            ("Due for revisit", "due"),
             ("With outgoing links", "linked"),
             ("Link coverage", "linked_pct"),
             ("True orphans", "orphans"),
@@ -696,7 +844,10 @@ def print_stats(notes, mentions, duplicates):
             status_table.add_row(status, str(count))
         console.print(status_table)
     else:
-        print(f"Notes reviewed: {payload['total']}")
+        print(f"Notes: {payload['total']}")
+        print(f"Reviewed at least once: {payload['reviewed']}")
+        print(f"Never reviewed: {payload['never_reviewed']}")
+        print(f"Due for revisit: {payload['due']}")
         print(f"With outgoing links: {payload['linked']} ({payload['linked_pct']}%)")
         print(f"True orphans: {payload['orphans']}")
         print(f"No outgoing links: {payload['no_out']}")
@@ -709,6 +860,7 @@ def print_stats(notes, mentions, duplicates):
     values = list(notes.values())
     shortest = sorted(values, key=lambda note: note.words)[:5]
     neglected = sorted(values, key=lambda note: note.last_touched)[:5]
+    due = ranked_revisit_notes(notes, 5)
     print("\nShortest:")
     for note in shortest:
         print(f"  {note.stem} ({note.words} words)")
@@ -716,6 +868,9 @@ def print_stats(notes, mentions, duplicates):
     for note in neglected:
         days = (TODAY - note.last_touched).days
         print(f"  {note.stem} ({days} days)")
+    print("\nDue for revisit:")
+    for note in due:
+        print(f"  {note.stem} ({review_reason(note)})")
     print(f"\nDashboard: {DASHBOARD}")
 
 
@@ -741,6 +896,16 @@ def build_dashboard(notes, mentions, duplicates, semantic=None, feedback=None):
         link = wikilink(note, stem_counts)
         reasons = " · ".join(needs_reason(note))
         lines.append(f"- {link} — {reasons}")
+
+    lines.extend(["", "## Due for revisit", ""])
+    due = ranked_revisit_notes(notes, 10)
+    if not due:
+        lines.append("- Nothing due. Write something new or schedule a note with `tend --revisit`.")
+    for note in due:
+        lines.append(
+            f"- {wikilink(note, stem_counts)} — {review_reason(note)} · "
+            f"{note.words} words · {note.status}"
+        )
 
     lines.extend(["", "## Needs links", ""])
     no_out = sorted(
@@ -819,6 +984,8 @@ def build_dashboard(notes, mentions, duplicates, semantic=None, feedback=None):
             "## Stats",
             "",
             f"- Notes: {payload['total']}",
+            f"- Reviewed at least once: {payload['reviewed']}",
+            f"- Due for revisit: {payload['due']}",
             f"- With outgoing links: {payload['linked']} ({payload['linked_pct']}%)",
             f"- True orphans: {payload['orphans']}",
             f"- Unlinked-mention pairs: {payload['mentions']}",
@@ -1360,6 +1527,31 @@ def show_note(note):
         print(f"  {reasons}")
 
 
+def show_revisit_note(note):
+    state = review_state(note)
+    last = state.reviewed.isoformat() if state.reviewed else "never"
+    age = (TODAY - note.last_touched).days
+    line = (
+        f"{note.words} words · {note.status} · "
+        f"{len(note.outlinks)} out · {len(note.inlinks)} in\n"
+        f"review: {review_reason(note)} · last reviewed {last} · "
+        f"interval {state.interval}d · ease {state.ease:.2f}\n"
+        f"last touched {note.last_touched.isoformat()} ({age} days ago)"
+    )
+    if console:
+        content = (
+            f"[bold]{note.stem}[/bold]\n"
+            f"{line}\n"
+            f"[dim]{note.rel}[/dim]"
+        )
+        console.print(Panel(content, box=box.ROUNDED, border_style="magenta"))
+    else:
+        print(f"\n{note.stem}")
+        print(f"  {note.rel}")
+        for part in line.splitlines():
+            print(f"  {part}")
+
+
 def show_suggestions(suggestions, stem_counts):
     if not suggestions:
         print("  No suggestions found.")
@@ -1522,6 +1714,113 @@ def show_duplicates_for(note, duplicates):
         print(f"  possible merge: [[{other.stem}]] — {reason}")
 
 
+def maybe_promote(note):
+    if UNFINISHED not in note.path.parents:
+        return
+    try:
+        raw = note.path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return
+    _, body = split_frontmatter(raw)
+    words = word_count(body)
+    if words < 350:
+        return
+    target = REFLECTIONS / note.path.name
+    if target.exists():
+        print(f"  ready to promote, but {target.name} already exists")
+        return
+    REFLECTIONS.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(note.path), str(target))
+    note.path = target
+    note.rel = str(target.relative_to(VAULT))
+    note.body = body
+    note.words = words
+    print(f"  promoted to Reflections ({words} words)")
+
+
+def follow_up_revisit(note):
+    print("  Prompts: What still holds? What changed? What would you cut?")
+    answer = prompt(
+        "  Schedule [s]oon [l]ater [b]ury [n]o schedule > ",
+        "n",
+    ).lower()
+    if answer in {"s", "l"}:
+        schedule_review(note, "soon" if answer == "s" else "later")
+    elif answer == "b":
+        snooze_review(note)
+
+
+def revisit_session(notes, records, all_notes, limit=3, semantic=None, feedback=None):
+    mentions = all_unlinked_mentions(notes)
+    duplicates = duplicate_pairs(notes)
+    write_dashboard(notes, mentions, duplicates, semantic, feedback)
+
+    candidates = ranked_revisit_notes(notes, limit)
+    if not candidates:
+        print("No notes due for revisit.")
+        return
+
+    print(f"\nRevisiting {len(candidates)} note(s). q to quit.\n")
+    touched = []
+    for position, note in enumerate(candidates, 1):
+        print(f"[{position}/{len(candidates)}]")
+        show_revisit_note(note)
+        action = prompt(
+            "  [o]pen [a]ppend [r]elate [s]oon [l]ater [b]ury "
+            "[x]archive [d]elete [n]ext [q]uit > ",
+            "n",
+        ).lower()
+        if action == "q":
+            break
+        if action == "o":
+            open_note(note)
+            follow_up_revisit(note)
+            touched.append(note)
+        elif action == "a":
+            append_revisit_scaffold(note)
+            open_note(note)
+            follow_up_revisit(note)
+            touched.append(note)
+        elif action == "r":
+            do_link(note, all_notes, records, semantic, feedback)
+            follow_up_revisit(note)
+            touched.append(note)
+        elif action in {"s", "l"}:
+            schedule_review(note, "soon" if action == "s" else "later")
+            touched.append(note)
+        elif action == "b":
+            snooze_review(note)
+        elif action == "x":
+            if prompt(f"  Archive {note.stem}? [y/N] > ", "n").lower() == "y":
+                update_frontmatter(
+                    note.path,
+                    {"status": "archived", "reviewed": TODAY.isoformat()},
+                )
+                note.status = "archived"
+                note.reviewed = TODAY
+                print("  archived")
+        elif action == "d":
+            if prompt(f"  Delete {note.stem}? [y/N] > ", "n").lower() == "y":
+                trash = VAULT / ".trash" / f"tend-{TODAY.isoformat()}"
+                trash.mkdir(parents=True, exist_ok=True)
+                target = trash / note.path.name
+                shutil.move(str(note.path), str(target))
+                print(f"  moved to {target}")
+        else:
+            print("  skipped")
+
+    for note in touched:
+        maybe_promote(note)
+
+    notes, records, all_notes = load_vault()
+    if semantic is not None:
+        semantic = build_semantic_index(notes)
+    mentions = all_unlinked_mentions(notes)
+    duplicates = duplicate_pairs(notes)
+    path = write_dashboard(notes, mentions, duplicates, semantic, feedback)
+    print(f"\nDashboard refreshed: {path}")
+
+
 def session(notes, records, all_notes, limit=3, links_only=False, semantic=None, feedback=None):
     mentions = all_unlinked_mentions(notes)
     duplicates = duplicate_pairs(notes)
@@ -1646,22 +1945,15 @@ def suggest_for_query(query, notes, records, all_notes, semantic=None, feedback=
     show_suggestions(suggestions, stem_counts)
 
 
-def run_review():
-    script = VAULT / "scripts" / "incremental.py"
-    if not script.exists():
-        print(f"Legacy review script not found: {script}")
-        return
-    subprocess.run([sys.executable, str(script)], check=False)
-
-
 def main():
     parser = argparse.ArgumentParser(description="Tend personal Obsidian notes.")
     parser.add_argument("--vault", help="Path to the Obsidian vault")
     parser.add_argument("--stats", action="store_true", help="Print a read-only audit")
     parser.add_argument("--refresh", action="store_true", help="Rebuild Reflections/Tending.md")
     parser.add_argument("--links", action="store_true", help="Session focused on notes without links")
+    parser.add_argument("--revisit", action="store_true", help="Revisit notes that are due for revision")
     parser.add_argument("--triage", action="store_true", help="Triage a batch of short notes")
-    parser.add_argument("--review", action="store_true", help="Run the legacy SM-2 review script")
+    parser.add_argument("--review", action="store_true", help="Alias for --revisit (legacy)")
     parser.add_argument("--suggest", metavar="NOTE", help="Show link suggestions for one note")
     parser.add_argument("--limit", type=int, default=3, help="Notes per session")
     parser.add_argument(
@@ -1705,10 +1997,6 @@ def main():
     if not notes:
         print(f"No personal notes found under {REFLECTIONS} and {UNFINISHED}.")
         return 1
-
-    if args.review:
-        run_review()
-        return 0
 
     feedback = FeedbackStore.load()
 
@@ -1775,6 +2063,10 @@ def main():
     path = write_dashboard(notes, mentions, duplicates, semantic, feedback)
     if args.refresh:
         print(f"Dashboard refreshed: {path}")
+        return 0
+
+    if args.revisit or args.review:
+        revisit_session(notes, records, all_notes, limit=args.limit, semantic=semantic, feedback=feedback)
         return 0
 
     if args.triage:
