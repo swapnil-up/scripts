@@ -56,6 +56,8 @@ def sync_vault(tracker):
     current_files = set()
 
     for p in REFLECTIONS_DIR.glob("*.md"):
+        if p.name == "Tending.md":
+            continue
         key = str(p.relative_to(VAULT_ROOT))
         current_files.add(key)
         if key not in tracker["notes"]:
@@ -222,7 +224,7 @@ def count_due(tracker):
 
 
 def get_echo():
-    md_files = list(REFLECTIONS_DIR.glob("*.md"))
+    md_files = [p for p in REFLECTIONS_DIR.glob("*.md") if p.name != "Tending.md"]
     if not md_files:
         return None
     random.shuffle(md_files)

@@ -16,7 +16,7 @@ fi
 
 mkdir -p "$VAULT_SCRIPTS_DIR"
 
-for file in incremental.py move_unfinished.py README.md; do
+for file in tend.py incremental.py move_unfinished.py README.md; do
 	src="$SCRIPTS_SRC/$file"
 	target="$VAULT_SCRIPTS_DIR/$file"
 

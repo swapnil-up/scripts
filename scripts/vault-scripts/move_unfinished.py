@@ -54,6 +54,8 @@ if __name__ == "__main__":
 
     # 1. Reflections → unfinished
     for note in REFLECTIONS.rglob("*.md"):
+        if note.name == "Tending.md" or "Maps" in note.parts or "Archive" in note.parts:
+            continue
         wc = word_count(note)
 
         if wc < WORD_THRESHOLD:
