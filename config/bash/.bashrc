@@ -412,13 +412,15 @@ export PATH="$PATH":"$HOME/.pub-cache/bin"
 
 
 
-[[ $- == *i* ]] && source ~/.local/share/blesh/ble.sh/ble.sh --attach=none
+if [[ $- == *i* && -f "$HOME/.local/share/blesh/ble.sh" ]]; then
+	source "$HOME/.local/share/blesh/ble.sh" --attach=none
+fi
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-export PATH="/home/swap/.config/herd-lite/bin:$PATH"
-export PHP_INI_SCAN_DIR="/home/swap/.config/herd-lite/bin:$PHP_INI_SCAN_DIR"
+export PATH="$HOME/.config/herd-lite/bin:$PATH"
+export PHP_INI_SCAN_DIR="$HOME/.config/herd-lite/bin:$PHP_INI_SCAN_DIR"
 
 # from neovim nvim appimage
 export PATH="$PATH:/opt/nvim/"
@@ -438,7 +440,7 @@ export PYENV_ROOT="$HOME/.pyenv"
 [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init - bash)"
 
-# source /home/swap/github/alacritty/extra/completions/alacritty.bash
+# source "$HOME/github/alacritty/extra/completions/alacritty.bash"
 
 # Source secrets (only if git-crypt has unlocked it — skip encrypted binary)
 if [ -f ~/.env.secret ]; then
@@ -448,7 +450,7 @@ if [ -f ~/.env.secret ]; then
 fi
 
 # opencode
-export PATH=/home/swap/.opencode/bin:$PATH
+export PATH="$HOME/.opencode/bin:$PATH"
 
 #THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
 export SDKMAN_DIR="$HOME/.sdkman"
@@ -460,8 +462,5 @@ export JAVA_HOME=$HOME/.sdkman/candidates/java/current
 [[ ${BLE_VERSION-} ]] && ble-attach
 
 
-# Added by Antigravity CLI installer
-export PATH="/home/swap/.local/bin:$PATH"
-
 # piper TTS
-export PATH="$PATH:/home/swap/github/piper_tts-1.4.2"
+export PATH="$PATH:$HOME/github/piper_tts-1.4.2"

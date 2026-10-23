@@ -20,13 +20,17 @@ done
 # 2. Make ibus the system IM (sets ~/.xinputrc -> env vars + daemon autostart)
 if command -v im-config &>/dev/null; then
 	echo "Setting ibus as the input method..."
-	im-config -n ibus
+	im-config -n ibus || echo "  [WARN] im-config failed; input method not changed"
 fi
 
 # 3. Register the Nepali engine + global switch (idempotent)
-gsettings set org.freedesktop.ibus.general use-global-engine true
-gsettings set org.freedesktop.ibus.general.hotkey triggers "['<Super><Shift>space']"
-gsettings set org.freedesktop.ibus.general preload-engines "['xkb:us::eng', 'm17n:ne:rom-translit']"
+if command -v gsettings &>/dev/null && gsettings get org.freedesktop.ibus.general use-global-engine >/dev/null 2>&1; then
+	gsettings set org.freedesktop.ibus.general use-global-engine true
+	gsettings set org.freedesktop.ibus.general.hotkey triggers "['<Super><Shift>space']"
+	gsettings set org.freedesktop.ibus.general preload-engines "['xkb:us::eng', 'm17n:ne:rom-translit']"
+else
+	echo "  [WARN] no graphical gsettings session; Nepali engine not registered"
+fi
 
 # 4. Restart daemon if running so the change applies immediately
 if pgrep -x ibus-daemon >/dev/null 2>&1; then

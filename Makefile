@@ -1,4 +1,4 @@
-.PHONY: format lint
+.PHONY: format lint doctor
 
 SHELL_FILES := $(shell find scripts setup config -name '*.sh' 2>/dev/null) \
                config/bash/.bashrc config/bash/.profile
@@ -11,3 +11,6 @@ format:
 lint:
 	bash -n $(SHELL_FILES)
 	python3 -m py_compile $(PYTHON_FILES) 2>/dev/null; true
+
+doctor:
+	./setup/verify.sh

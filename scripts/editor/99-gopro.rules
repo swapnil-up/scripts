@@ -9,11 +9,11 @@
 # The script resolves the mount point, renames files with timestamps, and
 # copies them into ~/vedit/raw/. Logs to ~/vedit/ingest.log.
 #
-# Replace /home/USER with your home path in the RUN line.
+# setup/system.sh fills in the user's home and username when installing this file.
 ACTION=="add", KERNEL=="sd[a-z][0-9]", \
   RUN+="/usr/bin/systemd-run --no-block --quiet --collect \
-        --uid=1000 --unit=vedit-ingest \
-        /home/swap/github/scripts/scripts/editor/gopro-ingest.sh %E{DEVNAME}"
+        --uid=@USER@ --unit=vedit-ingest \
+        @HOME@/github/scripts/scripts/editor/gopro-ingest.sh %E{DEVNAME}"
 
 # Fallback: also match whole removable block devices (no partition table).
 ACTION=="add", KERNEL=="sd[a-z]", SUBSYSTEM=="block", ENV{ID_FS_TYPE}=="", \

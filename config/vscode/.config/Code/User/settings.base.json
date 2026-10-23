@@ -162,7 +162,6 @@
   "files.autoSave": "afterDelay",
   "python.analysis.typeCheckingMode": "basic",
   "telemetry.telemetryLevel": "off",
-  "leetcode.workspaceFolder": "/home/swap/github/coding-problems/leetcode",
   "leetcode.hint.configWebviewMarkdown": false,
   "leetcode.hint.commandShortcut": false,
   "leetcode.hint.commentDescription": false,

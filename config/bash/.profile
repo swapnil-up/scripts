@@ -26,12 +26,12 @@ if [ -d "$HOME/.local/bin" ] ; then
     PATH="$HOME/.local/bin:$PATH"
 fi
 # Ubuntu make installation of Ubuntu Make binary symlink
-PATH=/home/swap/.local/share/umake/bin:$PATH
+PATH="$HOME/.local/share/umake/bin:$PATH"
 
 . "$HOME/.cargo/env"
 
 #This file depends on settings in .Xmodmap
-#xmodmap /home/swap/.Xmodmap
+#xmodmap "$HOME/.Xmodmap"
 
 #Use Spacebar as a Modifier
 #spare_modifier="Hyper_L"
@@ -43,6 +43,4 @@ PATH=/home/swap/.local/share/umake/bin:$PATH
 export PATH="$HOME/.elan/bin:$PATH"
 
 
-# Added by Antigravity CLI installer
-export PATH="/home/swap/.local/bin:$PATH"
 export XDG_DATA_DIRS="$HOME/.local/share/flatpak/exports/share:$XDG_DATA_DIRS"

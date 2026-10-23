@@ -1,8 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=versions.env
+source "$SCRIPT_DIR/versions.env"
+
 echo ">>> BINARIES_START <<<"
 echo "--- Installing Binaries and AppImages ---"
+
+# Rust-installed tools (Alacritty is not packaged in jammy).
+if [ -f "$HOME/.cargo/env" ]; then
+	# shellcheck disable=SC1091
+	. "$HOME/.cargo/env"
+fi
 
 mkdir -p "$HOME/.local/bin"
 mkdir -p "$HOME/opt"
@@ -43,7 +53,7 @@ fi
 if ! command -v anki &>/dev/null; then
 	TEMP_ANKI=$(mktemp -d)
 	cd "$TEMP_ANKI"
-	curl -L "https://github.com/ankitects/anki/releases/download/25.09/anki-launcher-25.09-linux.tar.zst" -o anki-launcher.tar.zst
+	curl -L "https://github.com/ankitects/anki/releases/download/${ANKI_VERSION}/anki-launcher-${ANKI_VERSION}-linux.tar.zst" -o anki-launcher.tar.zst
 	tar --use-compress-program=unzstd -xf anki-launcher.tar.zst
 	cd anki-launcher*/
 	sudo ./install.sh
@@ -98,7 +108,22 @@ else
 	echo "Firefox Developer Edition already exists, skipping."
 fi
 
-# 7. yt-dlp (keep at latest for YouTube playback in mpv)
+# 7. Alacritty (no jammy package; build with the Rust toolchain)
+if ! command -v alacritty &>/dev/null; then
+	echo "Installing Alacritty via Cargo (this may take a few minutes)..."
+	cargo install alacritty --locked
+fi
+
+# 8. ble.sh (bash line editor; not packaged)
+if [ ! -f "$HOME/.local/share/blesh/ble.sh" ]; then
+	echo "Installing ble.sh $BLE_VERSION..."
+	TEMP_BLE=$(mktemp -d)
+	git clone --depth 1 --branch "$BLE_VERSION" https://github.com/akinomyoga/ble.sh.git "$TEMP_BLE/ble.sh"
+	make -C "$TEMP_BLE/ble.sh" install PREFIX="$HOME/.local"
+	rm -rf "$TEMP_BLE"
+fi
+
+# 9. yt-dlp (keep at latest for YouTube playback in mpv)
 YTDLP_TARGET="$HOME/.local/bin/yt-dlp"
 if ! command -v yt-dlp &>/dev/null; then
 	curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$YTDLP_TARGET"

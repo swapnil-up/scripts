@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration: Update this path to your specific Obsidian vault location
-OBSIDIAN_VAULT="$HOME/obsidian-vault"
+OBSIDIAN_VAULT="${OBSIDIAN_VAULT:-$HOME/github/obsidian-vault}"
 NUM_NOTES=3
 
 # --- Key Fixes ---

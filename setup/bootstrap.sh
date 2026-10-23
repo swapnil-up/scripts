@@ -19,10 +19,9 @@ while true; do
 	kill -0 "$$" || exit
 done 2>/dev/null &
 
-# 2. Cleanup broken repo state first
-echo "Cleaning up legacy repository conflicts..." | tee -a "$LOG_FILE"
-sudo rm -f /etc/apt/sources.list.d/llvm-18.list* | tee -a "$LOG_FILE"
-sudo rm -f /etc/apt/trusted.gpg.d/llvm-18.gpg | tee -a "$LOG_FILE"
+# 2. Validate host, repo location, distro, and base tools
+echo "--- Running preflight ---" | tee -a "$LOG_FILE"
+"$SCRIPT_DIR/preflight.sh" 2>&1 | tee -a "$LOG_FILE"
 
 # 3. Define execution order
 SCRIPTS=(
@@ -31,6 +30,7 @@ SCRIPTS=(
 	"nepali.sh"     # Nepali typing (ibus-m17n + engine + toggle)
 	"system.sh"     # udev, groups, etc.
 	"languages.sh"  # Pyenv, NVM, Rust
+	"python.sh"     # Pinned Python + project dependencies
 	"kmp.sh"        # JDK 21, Android SDK, udev rules for KMP
 	"php.sh"        # PHP CLI, extensions, Composer
 	"source.sh"     # CMake, Clipmenu (in ~/github)

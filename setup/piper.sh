@@ -37,13 +37,5 @@ else
 	echo "$MODEL_NAME.onnx.json already exists, skipping."
 fi
 
-# 3. Ensure in PATH via .bashrc if not already
-LINE="export PATH=\"\$PATH:$PIPER_DIR\""
-if ! grep -qxF "export PATH=\"\$PATH:$PIPER_DIR\"" "$HOME/.bashrc" 2>/dev/null; then
-	echo "Adding piper to PATH in .bashrc..."
-	printf "\n# piper TTS\n%s\n" "$LINE" >> "$HOME/.bashrc"
-fi
-
 echo "piper TTS ready at $PIPER_DIR"
-echo "Run 'source ~/.bashrc' or log out/in for PATH to take effect."
 echo ">>> PIPER_COMPLETE <<<"

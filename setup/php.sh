@@ -1,11 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=versions.env
+source "$SCRIPT_DIR/versions.env"
+
 echo ">>> PHP_START <<<"
 echo "--- Setting up PHP + Composer ---"
 
 # ── PHP (CLI + common extensions) ─────────────────────────────────
-PHP_VERSION="8.3"
 PHP_PACKAGES=(
 	"php${PHP_VERSION}-cli"
 	"php${PHP_VERSION}-mbstring"
@@ -42,13 +45,6 @@ if ! command -v composer &>/dev/null; then
 	curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
 else
 	echo "Composer already installed, skipping..."
-fi
-
-# ── PATH for Composer global binaries ──────────────────────────────
-COMPOSER_BIN='export PATH="$PATH:$HOME/.config/composer/vendor/bin"'
-if ! grep -q "\.config/composer/vendor/bin" "$HOME/.bashrc" 2>/dev/null; then
-	echo "$COMPOSER_BIN" >> "$HOME/.bashrc"
-	echo "Added Composer vendor/bin to .bashrc"
 fi
 
 echo ">>> PHP_COMPLETE <<<"

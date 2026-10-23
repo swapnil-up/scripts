@@ -1,33 +1,86 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=manifest.sh
+source "$SCRIPT_DIR/manifest.sh"
+
+DRY_RUN=false
+if [ "${1:-}" = "--dry-run" ]; then
+	DRY_RUN=true
+fi
+
 echo ">>> APT_START <<<"
 echo "--- Installing APT Packages ---"
 
-APPS=(
-	"tmux" "fzf" "ripgrep" "htop" "bash-completion" "bash"
-	"conky-all" "dbus" "dunst" "flameshot" "git-crypt"
-	"i3-wm" "i3status" "mpv" "rofi" "stow" "tree" "i3lock"
-	"blueman" "pulseaudio-utils" "libpulse0" "maim"
-	"npm" "trash-cli" "gedit" "zoxide" "ncal" "pipx"
-	"firefox" "brightnessctl" "feh" "neovim" "fastfetch" "code"
-	"build-essential" "git" "curl" "libssl-dev" "zlib1g-dev" 
-	"libbz2-dev" "libreadline-dev" "libsqlite3-dev" "libncursesw5-dev" 
-	"xz-utils" "tk-dev" "libxml2-dev" "libxmlsec1-dev" "libffi-dev" 
-	"liblzma-dev" "pkg-config" "libc6-dev-i386" "clang-18" 
-	"libclang-common-18-dev" "python3-pip" "python3-venv" "python3-full"
-	"libasound2-dev" "libx11-dev" "libxrandr-dev" "libxi-dev" 
-	"libxcursor-dev" "libxinerama-dev" "libxkbcommon-dev"
-	"libxcb-xinerama0" "libxcb-cursor0" "libnss3" "zstd" "libfuse2"
-	"xsel" "xclip" "libextutils-pkgconfig-perl"
-	"postgresql" "postgresql-contrib" "postgresql-16-pgvector"
+CODENAME=""
+if [ -r /etc/os-release ]; then
+	# shellcheck disable=SC1091
+	. /etc/os-release
+	CODENAME="${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}"
+fi
+if [ -z "$CODENAME" ]; then
+	echo "ERROR: could not detect OS codename" >&2
+	exit 1
+fi
+
+PACKAGES=(
+	"${APT_CLI[@]}"
+	"${APT_DESKTOP[@]}"
+	"${APT_APPS[@]}"
+	"${APT_BUILD[@]}"
+	"${APT_DATABASE[@]}"
 )
 
-for app in "${APPS[@]}"; do
-	if ! dpkg -l "$app" 2>/dev/null | grep -q '^ii'; then
-		echo "Installing $app..."
-		sudo apt install -y "$app"
+is_installable() {
+	local candidate
+	candidate="$(apt-cache policy "$1" 2>/dev/null | awk '/^  Candidate:/ {print $2; exit}')"
+	[ -n "$candidate" ] && [ "$candidate" != "(none)" ]
+}
+
+install=()
+skipped=()
+for pkg in "${PACKAGES[@]}"; do
+	if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+		continue
+	fi
+	if ! is_installable "$pkg"; then
+		skipped+=("$pkg")
+		continue
+	fi
+	install+=("$pkg")
+done
+
+for pkg in "${APT_OPTIONAL[@]}"; do
+	if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+		continue
+	fi
+	if is_installable "$pkg"; then
+		install+=("$pkg")
+	else
+		echo "  [SKIP] $pkg is not available on $CODENAME"
 	fi
 done
+
+if [ "${#skipped[@]}" -gt 0 ]; then
+	echo "  [SKIP] Not available on $CODENAME: ${skipped[*]}"
+fi
+
+if [ "${#install[@]}" -eq 0 ]; then
+	echo "All APT packages already installed."
+	echo ">>> APT_COMPLETE <<<"
+	exit 0
+fi
+
+if [ "$DRY_RUN" = true ]; then
+	echo "Would install ${#install[@]} package(s):"
+	printf '  %s\n' "${install[@]}"
+	echo ">>> APT_COMPLETE <<<"
+	exit 0
+fi
+
+echo "Installing ${#install[@]} package(s)..."
+export DEBIAN_FRONTEND=noninteractive
+sudo apt-get install -y "${install[@]}"
 
 echo ">>> APT_COMPLETE <<<"

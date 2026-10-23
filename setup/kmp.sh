@@ -1,8 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=versions.env
+source "$SCRIPT_DIR/versions.env"
+
 echo ">>> KMP_START <<<"
 echo "--- Setting up Kotlin Multiplatform (Android + JDK) ---"
+JAVA_MAJOR="${JAVA_VERSION%%-*}"
 
 # ── SDKMAN (for JDK) ──────────────────────────────────────────────
 if [ ! -d "$HOME/.sdkman" ]; then
@@ -13,23 +18,27 @@ else
 fi
 
 set +u
+export sdkman_auto_answer=true
+export sdkman_auto_selfupdate=false
+# shellcheck disable=SC1091
 source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# ── JDK (Temurin) ─────────────────────────────────────────────────
+if ! java -version 2>&1 | grep -q "version \"$JAVA_MAJOR"; then
+	echo "Installing JDK $JAVA_VERSION (Temurin)..."
+	sdk install java "$JAVA_VERSION"
+else
+	echo "JDK $JAVA_VERSION already installed, skipping..."
+fi
+sdk default java "$JAVA_VERSION"
+sdk use java "$JAVA_VERSION"
 set -u
 
-# ── JDK 21 (Temurin) ──────────────────────────────────────────────
-if ! java -version 2>&1 | grep -q "21"; then
-	echo "Installing JDK 21 (Temurin)..."
-	sdk install java 21.0.11-tem
-else
-	echo "JDK 21 already installed, skipping..."
+if ! java -version 2>&1 | grep -q "version \"$JAVA_MAJOR"; then
+	echo "ERROR: JDK $JAVA_VERSION is not the active Java version" >&2
+	exit 1
 fi
-
-# ── JAVA_HOME (persist via shell config) ──────────────────────────
-JAVA_HOME_LINE='export JAVA_HOME=$HOME/.sdkman/candidates/java/current'
-if ! grep -q "JAVA_HOME" "$HOME/.bashrc" 2>/dev/null; then
-	echo "$JAVA_HOME_LINE" >> "$HOME/.bashrc"
-	echo "Added JAVA_HOME to .bashrc"
-fi
+export JAVA_HOME="$HOME/.sdkman/candidates/java/current"
 
 # ── Android SDK ───────────────────────────────────────────────────
 ANDROID_SDK="$HOME/Android/Sdk"
@@ -47,24 +56,21 @@ fi
 export ANDROID_HOME="$ANDROID_SDK"
 export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
 
-# ── ANDROID_HOME (persist via shell config) ───────────────────────
-ANDROID_HOME_LINE='export ANDROID_HOME=$HOME/Android/Sdk'
-ANDROID_PATH_LINE='export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools'
-if ! grep -q "ANDROID_HOME" "$HOME/.bashrc" 2>/dev/null; then
-	{
-		echo "$ANDROID_HOME_LINE"
-		echo "$ANDROID_PATH_LINE"
-	} >> "$HOME/.bashrc"
-	echo "Added ANDROID_HOME to .bashrc"
-fi
-
 # ── SDK components (platform-tools, platform, build-tools) ────────
-echo "Installing SDK components (platform-tools, platform android-36, build-tools 36.0.0)..."
-yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
+SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+echo "Accepting Android SDK licenses..."
+set +e
+yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1
+set -e
+
+echo "Installing SDK components (platform-tools, platform $ANDROID_PLATFORM, build-tools $ANDROID_BUILD_TOOLS)..."
+set +e
+yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
 	"platform-tools" \
-	"platforms;android-36" \
-	"build-tools;36.0.0" \
-	2>&1 | grep -E "Installing|Downloading|done" || echo "  [WARN] sdkmanager may have failed — check output above"
+	"platforms;$ANDROID_PLATFORM" \
+	"build-tools;$ANDROID_BUILD_TOOLS" \
+	2>&1 | grep -E "Installing|Downloading|done"
+set -e
 
 # ── udev rule for Android devices ─────────────────────────────────
 UDEV_FILE="/etc/udev/rules.d/51-android.rules"
