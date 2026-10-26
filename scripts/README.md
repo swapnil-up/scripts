@@ -35,6 +35,7 @@ Most scripts are called directly or via keybinding (i3/espanso).
 
 - `anki-piper.sh`: triggered by i3 `$mod+o`, captures highlighted text
 - `rofi-smart-launcher.sh`: triggered by i3 `$mod+d`; apps, comma commands, and aliases
+  - Search uses fuzzy matching sorted by match strength; the idle list is ordered by most recent use (`~/.cache/rofi-launcher/usage.json`)
   - `,tend` opens the tending menu; other aliases include `,bootstrap`, `,crawler`, `,k`, `,newip`, `,docker-clean`, `,clickpaste`
   - `,w gh cats` searches GitHub; `,w yt cats` YouTube; `,w wiki nepal` Wikipedia
   - `,off` opens the delayed-shutdown menu; `,off cancel` and `,off add 5m` require a typed reason

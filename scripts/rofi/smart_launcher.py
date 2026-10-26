@@ -13,6 +13,7 @@ from urllib.parse import quote_plus
 
 CACHE_DIR = Path.home() / ".cache/rofi-launcher"
 APPS_CACHE = CACHE_DIR / "apps.json"
+USAGE_CACHE = CACHE_DIR / "usage.json"
 
 DESKTOP_DIRS = [
     Path("/usr/share/applications"),
@@ -158,22 +159,75 @@ def load_apps():
                 return cached["apps"]
 
     apps = index_apps()
-    APPS_CACHE.write_text(
-        json.dumps({"version": APPS_CACHE_VERSION, "apps": apps})
-    )
+    APPS_CACHE.write_text(json.dumps({"version": APPS_CACHE_VERSION, "apps": apps}))
     return apps
 
 
+def load_usage():
+    try:
+        data = json.loads(USAGE_CACHE.read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        str(key): float(value)
+        for key, value in data.items()
+        if isinstance(value, (int, float))
+    }
+
+
+def record_usage(key):
+    usage = load_usage()
+    usage[key] = time.time()
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        USAGE_CACHE.write_text(json.dumps(usage))
+    except OSError:
+        pass
+
+
+def cmd_key(alias):
+    return alias[1:] if alias.startswith(",") else alias
+
+
+def mru_sort(items, key_fn, usage):
+    """Order kept for never-used items; most recently used float to the top."""
+    return [
+        item
+        for _, item in sorted(
+            enumerate(items),
+            key=lambda pair: (-usage.get(key_fn(pair[1]), 0.0), pair[0]),
+        )
+    ]
+
+
 def build_candidates():
+    usage = load_usage()
     items = ["Terminal"]
 
-    items += [entry_display(label, alias) for label, alias in COMMANDS]
+    items += [
+        entry_display(label, alias)
+        for label, alias in mru_sort(
+            COMMANDS, lambda command: f"cmd:{cmd_key(command[1])}", usage
+        )
+    ]
     items.append("---")
-    items += [alias_display(alias) for alias in ALIASES]
+    items += [
+        alias_display(alias)
+        for alias in mru_sort(ALIASES, lambda a: f"alias:{a['key']}", usage)
+    ]
     items.append("---")
 
     # apps
-    for app in load_apps():
+    apps = sorted(
+        load_apps(),
+        key=lambda app: (
+            -usage.get(f"app:{app['name']}", 0.0),
+            app["name"].casefold(),
+        ),
+    )
+    for app in apps:
         items.append(app["name"])
 
     return items
@@ -204,6 +258,7 @@ def launch_terminal(title, command, hold=True):
 
 
 def run_alias(alias):
+    record_usage(f"alias:{alias['key']}")
     cmd = os.path.expanduser(alias["cmd"])
     mode = alias["mode"]
 
@@ -214,7 +269,9 @@ def run_alias(alias):
     elif mode == "quiet":
         result = subprocess.run(cmd, shell=True, executable="/bin/bash")
         if result.returncode:
-            subprocess.run(["notify-send", "-u", "critical", alias["label"], "Command failed"])
+            subprocess.run(
+                ["notify-send", "-u", "critical", alias["label"], "Command failed"]
+            )
         else:
             subprocess.run(["notify-send", alias["label"]])
     else:
@@ -282,10 +339,12 @@ def dispatch(raw):
         APP_MAP = {a["name"]: a["desktop_id"] for a in apps_cache}
         desktop_id = APP_MAP.get(raw)
         if desktop_id:
+            record_usage(f"app:{raw}")
             subprocess.run(["gtk-launch", desktop_id])
         else:
             # fallback: try to exec as command
             if shutil.which(raw):
+                record_usage(f"app:{raw}")
                 subprocess.Popen([raw])
             else:
                 subprocess.run(["notify-send", "Cannot launch app", raw])
@@ -294,6 +353,25 @@ def dispatch(raw):
 
 def handle_command(base, sub, rest):
     home = Path.home()
+
+    if base in [
+        "t",
+        "tt",
+        "tr",
+        "ta",
+        "n",
+        "til",
+        "why",
+        "hmm",
+        "timer",
+        "off",
+        "mf",
+        "w",
+        "piper",
+        "whisper",
+        "at",
+    ]:
+        record_usage(f"cmd:{base}")
 
     if base in ["t", "tt", "tr", "ta"]:
         if rest:
@@ -316,9 +394,7 @@ def handle_command(base, sub, rest):
             )
 
     elif base == "timer":
-        subprocess.run(
-            [home / "github/scripts/scripts/rofi/rofi-timer-menu.sh"]
-        )
+        subprocess.run([home / "github/scripts/scripts/rofi/rofi-timer-menu.sh"])
 
     elif base == "off":
         args = [home / "github/scripts/scripts/rofi/rofi-shutdown-menu.sh"]
@@ -367,7 +443,9 @@ def handle_command(base, sub, rest):
         launch_terminal("Whisper STT", "~/github/scripts/scripts/utils/whisper.sh")
 
     elif base == "at":
-        launch_terminal("Audio transcribe", "~/github/scripts/scripts/audio-transcribe.sh")
+        launch_terminal(
+            "Audio transcribe", "~/github/scripts/scripts/audio-transcribe.sh"
+        )
 
     else:
         subprocess.run(["notify-send", "Unknown command", f",{base}"])
