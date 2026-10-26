@@ -15,6 +15,7 @@ Dotfiles managed with git-stow. Each subdirectory is a stow package. Usually aut
 | `i3/` | Window manager config |
 | `i3status/` | Status bar |
 | `kanata/` | Keyboard layout |
+| `mpv/` | Video player config, scripts, and timebox watch/break cycle |
 | `nvim/` | Neovim (Kickstart-based) |
 | `picom/` | Compositor |
 | `rofi/` | App launcher |

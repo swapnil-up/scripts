@@ -3,18 +3,21 @@
 
 Usage:
   timer-daemon                  Run the server (blocks, meant for systemd)
-  timer-daemon start SECS [LABEL]
-  timer-daemon stop ID
+  timer-daemon start SECS [LABEL] [--action notify|poweroff]
+  timer-daemon stop ID [REASON]
+  timer-daemon extend ID SECS [REASON]
   timer-daemon list
   timer-daemon ping
 
 Client mode connects to the socket and prints a JSON response. The server
-rings (paplay + dunstify) when a timer expires and persists state across
-restarts in $XDG_STATE_HOME/timer-daemon.json.
+rings (paplay + dunstify) when a notify timer expires, or runs
+`systemctl poweroff` for poweroff timers. State persists across restarts in
+$XDG_STATE_HOME/timer-daemon.json.
 """
 
 import json
 import os
+import shlex
 import socket
 import subprocess
 import sys
@@ -26,6 +29,8 @@ RING_SOUND = os.path.expanduser("~/.local/share/sounds/timer-ring.wav")
 RING_SOURCE = "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
 RING_PLAYS = int(os.environ.get("TIMER_RING_PLAYS", "1"))
 RING_GAP = 0.4
+VALID_ACTIONS = {"notify", "poweroff"}
+WARN_THRESHOLDS = (300, 60, 10)
 
 
 def ensure_ring_sound():
@@ -45,7 +50,8 @@ def ensure_ring_sound():
               file=sys.stderr)
 
 _lock = threading.Lock()
-timers = {}  # id -> {"label", "end_time", "duration"}
+timers = {}  # id -> {"label", "end_time", "duration", "action", "warn_thresholds"}
+warned = set()  # (timer id, threshold) pairs already warned
 next_id = 1
 
 
@@ -89,6 +95,14 @@ def load_state():
         now = time.time()
         for t in data.get("timers", []):
             if t["end_time"] > now:
+                t.setdefault("action", "notify")
+                if t["action"] == "poweroff" and "warn_thresholds" not in t:
+                    remaining = t["end_time"] - now
+                    t["warn_thresholds"] = [
+                        threshold
+                        for threshold in WARN_THRESHOLDS
+                        if threshold < remaining
+                    ]
                 timers[t["id"]] = t
                 next_id = max(next_id, t["id"] + 1)
     except (OSError, ValueError):
@@ -104,6 +118,88 @@ def save_state():
             json.dump(data, f)
     except OSError:
         pass
+
+
+def notify(title, body, urgent=True):
+    subprocess.run(
+        [
+            "notify-send",
+            "-u",
+            "critical" if urgent else "normal",
+            "-a",
+            "Shutdown",
+            title,
+            body,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def fmt_remaining(seconds):
+    remaining = max(0, int(seconds))
+    minutes, secs = divmod(remaining, 60)
+    if minutes:
+        return f"{minutes}m {secs:02d}s" if secs else f"{minutes}m"
+    return f"{secs}s"
+
+
+def warn_poweroff(t, threshold):
+    remaining = max(0, int(t["end_time"] - time.time()))
+    log_event(
+        "warn",
+        id=t["id"],
+        label=t["label"],
+        action="poweroff",
+        threshold=threshold,
+        remaining=remaining,
+    )
+    notify(
+        f"Shutdown in {fmt_remaining(remaining)}",
+        "Run ,off to cancel or add time.",
+    )
+
+
+def poweroff(t):
+    label = t["label"] or "Shutdown"
+    log_event(
+        "expire",
+        id=t["id"],
+        label=label,
+        duration=t["duration"],
+        action="poweroff",
+    )
+    notify("Shutting down now", label)
+    command = os.environ.get("TIMER_SHUTDOWN_CMD", "systemctl poweroff")
+    try:
+        result = subprocess.run(
+            shlex.split(command),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+        )
+        returncode = result.returncode
+    except (OSError, subprocess.SubprocessError) as exc:
+        returncode = -1
+        log_event(
+            "action_failed",
+            id=t["id"],
+            label=label,
+            action="poweroff",
+            error=str(exc),
+        )
+        notify("Shutdown failed", str(exc))
+        return
+
+    if returncode:
+        log_event(
+            "action_failed",
+            id=t["id"],
+            label=label,
+            action="poweroff",
+            returncode=returncode,
+        )
+        notify("Shutdown failed", f"{command} returned {returncode}")
 
 
 def ring(t):
@@ -122,14 +218,30 @@ def expire_loop():
     while True:
         now = time.time()
         due = []
+        warnings = []
         with _lock:
             for tid, t in list(timers.items()):
                 if now >= t["end_time"]:
                     due.append((tid, t))
+                    continue
+                if t.get("action") != "poweroff":
+                    continue
+                for threshold in t.get("warn_thresholds", []):
+                    key = (tid, threshold)
+                    if key not in warned and t["end_time"] - now <= threshold:
+                        warned.add(key)
+                        warnings.append((t, threshold))
             for tid, _ in due:
                 del timers[tid]
+                for threshold in WARN_THRESHOLDS:
+                    warned.discard((tid, threshold))
+        for t, threshold in warnings:
+            threading.Thread(
+                target=warn_poweroff, args=(t, threshold), daemon=True
+            ).start()
         for _, t in due:
-            threading.Thread(target=ring, args=(t,), daemon=True).start()
+            target = poweroff if t.get("action") == "poweroff" else ring
+            threading.Thread(target=target, args=(t,), daemon=True).start()
             save_state()
         time.sleep(0.5)
 
@@ -146,6 +258,9 @@ def handle(cmd):
             return {"ok": False, "error": "invalid seconds"}
         if secs <= 0:
             return {"ok": False, "error": "seconds must be > 0"}
+        action = cmd.get("action", "notify")
+        if action not in VALID_ACTIONS:
+            return {"ok": False, "error": f"invalid action: {action}"}
         with _lock:
             tid = next_id
             next_id += 1
@@ -154,21 +269,79 @@ def handle(cmd):
                 "label": cmd.get("label", ""),
                 "end_time": time.time() + secs,
                 "duration": secs,
+                "action": action,
+                "warn_thresholds": [
+                    threshold
+                    for threshold in WARN_THRESHOLDS
+                    if action == "poweroff" and threshold < secs
+                ],
             }
         save_state()
-        log_event("start", id=tid, label=cmd.get("label", ""), duration=secs)
+        log_event(
+            "start",
+            id=tid,
+            label=cmd.get("label", ""),
+            duration=secs,
+            action=action,
+        )
         return {"ok": True, "id": tid}
     if op == "stop":
         try:
             tid = int(cmd.get("id", -1))
         except (TypeError, ValueError):
             return {"ok": False, "error": "invalid id"}
+        reason = str(cmd.get("reason", "")).strip()
         with _lock:
             t = timers.pop(tid, None)
+            warned.discard(tid)
         save_state()
         if t:
-            log_event("stop", id=tid, label=t["label"], duration=t["duration"])
+            log_event(
+                "stop",
+                id=tid,
+                label=t["label"],
+                duration=t["duration"],
+                action=t.get("action", "notify"),
+                reason=reason,
+            )
         return {"ok": True}
+    if op == "extend":
+        try:
+            tid = int(cmd.get("id", -1))
+            secs = int(cmd.get("secs", 0))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "invalid id or seconds"}
+        if secs <= 0:
+            return {"ok": False, "error": "seconds must be > 0"}
+        reason = str(cmd.get("reason", "")).strip()
+        with _lock:
+            t = timers.get(tid)
+            if not t:
+                return {"ok": False, "error": "timer not found"}
+            t["end_time"] += secs
+            remaining = max(0, int(t["end_time"] - time.time()))
+            for threshold in WARN_THRESHOLDS:
+                warned.discard((tid, threshold))
+            t["warn_thresholds"] = [
+                threshold
+                for threshold in WARN_THRESHOLDS
+                if t.get("action") == "poweroff" and threshold < remaining
+            ]
+            label = t["label"]
+            action = t.get("action", "notify")
+            duration = t["duration"]
+        save_state()
+        log_event(
+            "extend",
+            id=tid,
+            label=label,
+            duration=duration,
+            action=action,
+            seconds=secs,
+            remaining=remaining,
+            reason=reason,
+        )
+        return {"ok": True, "id": tid, "remaining": remaining}
     if op == "list":
         now = time.time()
         with _lock:
@@ -179,6 +352,7 @@ def handle(cmd):
                         "label": t["label"],
                         "remaining": max(0, int(t["end_time"] - now)),
                         "duration": t["duration"],
+                        "action": t.get("action", "notify"),
                     }
                     for tid, t in sorted(timers.items())
                 ]
@@ -247,11 +421,30 @@ def client(args):
 def _client(args):
     cmd = {"cmd": args[0] if args else "ping"}
     if args and args[0] == "start":
-        secs = int(args[1])
-        label = " ".join(args[2:])
-        cmd = {"cmd": "start", "secs": secs, "label": label}
+        start_args = list(args[1:])
+        action = "notify"
+        if "--action" in start_args:
+            idx = start_args.index("--action")
+            if idx + 1 >= len(start_args):
+                raise SystemExit("--action requires a value")
+            action = start_args[idx + 1]
+            del start_args[idx : idx + 2]
+        secs = int(start_args[0])
+        label = " ".join(start_args[1:])
+        cmd = {"cmd": "start", "secs": secs, "label": label, "action": action}
     elif args and args[0] == "stop":
-        cmd = {"cmd": "stop", "id": int(args[1])}
+        cmd = {
+            "cmd": "stop",
+            "id": int(args[1]),
+            "reason": " ".join(args[2:]),
+        }
+    elif args and args[0] == "extend":
+        cmd = {
+            "cmd": "extend",
+            "id": int(args[1]),
+            "secs": int(args[2]),
+            "reason": " ".join(args[3:]),
+        }
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.connect(socket_path())
     s.sendall((json.dumps(cmd) + "\n").encode())

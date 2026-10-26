@@ -89,7 +89,7 @@ active=$(send list | python3 -c '
 import json, sys
 data = json.loads(sys.stdin.read())
 for t in data.get("timers", []):
-    if t["remaining"] <= 0:
+    if t["remaining"] <= 0 or t.get("action", "notify") != "notify":
         continue
     rem = t["remaining"]
     h, rem = divmod(rem, 3600)
@@ -214,7 +214,7 @@ import json, sys
 data = json.loads(sys.stdin.read())
 target = sys.argv[1]
 for t in data.get("timers", []):
-    if t["remaining"] <= 0:
+    if t["remaining"] <= 0 or t.get("action", "notify") != "notify":
         continue
     rem = t["remaining"]
     h, rem = divmod(rem, 3600)

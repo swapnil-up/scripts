@@ -15,6 +15,7 @@ import sys
 SOCKET_NAME = "timer-daemon.sock"
 
 RED = "#BF616A"
+ORANGE = "#D08770"
 YELLOW = "#EBCB8B"
 CYAN = "#88C0D0"
 DIM = "#4C566A"
@@ -56,7 +57,20 @@ def main():
     data = query()
     timers = (data or {}).get("timers", [])
     active = [t for t in timers if t["remaining"] > 0]
-    if not active:
+    shutdown = [t for t in active if t.get("action") == "poweroff"]
+
+    if shutdown:
+        soonest = min(shutdown, key=lambda t: t["remaining"])
+        label = f" ({soonest['label']})" if soonest.get("label") else ""
+        text = f"Off {fmt(soonest['remaining'])}{label}"
+        color = RED if soonest["remaining"] <= 60 else ORANGE
+        block = {
+            "name": "shutdown",
+            "full_text": text,
+            "short_text": text,
+            "color": color,
+        }
+    elif not active:
         block = {
             "name": "timer",
             "full_text": "Timer",

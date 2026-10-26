@@ -84,6 +84,8 @@ diff <(ssh device-b '~/github/scripts/setup/verify.sh' 2>&1) \
 | Editor | **neovim**, **VS Code** (generated from `settings.base.json`) |
 | Notifications | **dunst** |
 | System info | **conky** on desktop (projects, todos, stats, notes, quotes, year progress) |
+| Video | **mpv** — timebox watch/break cycle, quality menu, bookmarks |
+| Restlessness | `,off` delayed poweroff — cancel/extend requires a typed reason |
 | Anki | Piper TTS card creation, reviewer workflow, game controller cards |
 | TTS/STT | Piper TTS, Whisper.cpp |
 | Clipboard | clipmenu + rofi |

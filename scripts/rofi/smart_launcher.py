@@ -32,6 +32,7 @@ COMMANDS = [
     ("Remove todo", ",tr"),
     ("Archive completed todos", ",ta"),
     ("Set / cancel timer", ",timer"),
+    ("Shut down / cancel / extend", ",off"),
     ("New note", ",n"),
     ("New TIL", ",til"),
     ("New why note", ",why"),
@@ -312,6 +313,12 @@ def handle_command(base, sub, rest):
         subprocess.run(
             [home / "github/scripts/scripts/rofi/rofi-timer-menu.sh"]
         )
+
+    elif base == "off":
+        args = [home / "github/scripts/scripts/rofi/rofi-shutdown-menu.sh"]
+        if rest:
+            args.extend(rest.split())
+        subprocess.run(args)
 
     elif base == "mf":
         log_annoying()

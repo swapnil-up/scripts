@@ -17,6 +17,7 @@ i3status = subprocess.Popen(
 )
 
 TIMER_MENU = f"{home}/github/scripts/scripts/rofi/rofi-timer-menu.sh"
+SHUTDOWN_MENU = f"{home}/github/scripts/scripts/rofi/rofi-shutdown-menu.sh"
 
 
 def click_listener():
@@ -29,12 +30,19 @@ def click_listener():
             evt = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if evt.get("name") == "timer" and evt.get("button") == 1:
-            subprocess.Popen(
-                ["bash", TIMER_MENU],
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+        if evt.get("button") != 1:
+            continue
+        if evt.get("name") == "timer":
+            menu = TIMER_MENU
+        elif evt.get("name") == "shutdown":
+            menu = SHUTDOWN_MENU
+        else:
+            continue
+        subprocess.Popen(
+            ["bash", menu],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 threading.Thread(target=click_listener, daemon=True).start()
