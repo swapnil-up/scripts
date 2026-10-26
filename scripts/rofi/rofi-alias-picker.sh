@@ -8,6 +8,7 @@ entries=(
   "piper:~/github/scripts/scripts/utils/piper.sh:text-to-speech (clipboard)"
   "crawler:~/github/scripts/scripts/python/crawler.py:web crawler"
   "k:systemctl --user restart kanata:restart kanata"
+  "newip:~/github/scripts/scripts/warp-new-ip.sh:rotate Cloudflare WARP IP"
   "docker-clean:docker container prune -f; docker image prune -f; docker network prune -f; docker volume prune -f:prune docker"
   "clickpaste:sleep 3; xdotool type \"\$(xclip -o -selection clipboard)\":type clipboard contents"
 )

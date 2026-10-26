@@ -61,5 +61,14 @@ if [ ! -f "$SURY_LIST" ]; then
 	echo "deb [signed-by=/usr/share/keyrings/sury-php.gpg] https://packages.sury.org/php/ $CODENAME main" | sudo tee "$SURY_LIST"
 fi
 
+# 6. Cloudflare WARP
+WARP_LIST="/etc/apt/sources.list.d/cloudflare-client.list"
+if [ ! -f "$WARP_LIST" ] || ! grep -q "$CODENAME" "$WARP_LIST"; then
+	echo "Configuring Cloudflare WARP repository for $CODENAME..."
+	curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg |
+		gpg --dearmor | sudo tee /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg >/dev/null
+	echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $CODENAME main" | sudo tee "$WARP_LIST"
+fi
+
 sudo apt-get update -y
 echo ">>> REPOS_COMPLETE <<<"

@@ -34,7 +34,7 @@ interrupted run resumes where it stopped.
 
 | Step | What it does |
 |------|-------------|
-| `repos.sh` | Adds PPAs (Neovim, fastfetch), LLVM, Sury PHP, VS Code |
+| `repos.sh` | Adds PPAs (Neovim, fastfetch), LLVM, Sury PHP, VS Code, Cloudflare WARP |
 | `apt.sh` | Installs packages from `manifest.sh`, skipping unavailable ones |
 | `nepali.sh` | ibus-m17n engine and Nepali typing toggle |
 | `system.sh` | Groups, udev rules (uinput, GoPro), linger, dark mode |
@@ -88,6 +88,7 @@ diff <(ssh device-b '~/github/scripts/setup/verify.sh' 2>&1) \
 | Restlessness | `,off` delayed poweroff — cancel/extend requires a typed reason |
 | Anki | Piper TTS card creation, reviewer workflow, game controller cards |
 | TTS/STT | Piper TTS, Whisper.cpp |
+| VPN | **Cloudflare WARP** — installed by bootstrap; `,newip` rotates the registration |
 | Clipboard | clipmenu + rofi |
 | File search | fastfind (`swapnil-up/search`) + rofi |
 

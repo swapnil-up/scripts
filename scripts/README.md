@@ -35,8 +35,9 @@ Most scripts are called directly or via keybinding (i3/espanso).
 
 - `anki-piper.sh`: triggered by i3 `$mod+o`, captures highlighted text
 - `rofi-smart-launcher.sh`: triggered by i3 `$mod+d`; apps, comma commands, and aliases
-  - `,tend` opens the tending menu; other aliases include `,bootstrap`, `,crawler`, `,k`, `,docker-clean`, `,clickpaste`
+  - `,tend` opens the tending menu; other aliases include `,bootstrap`, `,crawler`, `,k`, `,newip`, `,docker-clean`, `,clickpaste`
   - `,w gh cats` searches GitHub; `,w yt cats` YouTube; `,w wiki nepal` Wikipedia
   - `,off` opens the delayed-shutdown menu; `,off cancel` and `,off add 5m` require a typed reason
 - `rofi-tend-menu.sh`: opened from `$mod+d` via `,tend`; Obsidian tending, revisits, audits, and dashboard
 - `piper.sh`/`whisper.sh`: use ~/github/piper_tts for TTS
+- `warp-new-ip.sh`: rotates the Cloudflare WARP registration (disconnect, delete, register, connect); run via `,newip`

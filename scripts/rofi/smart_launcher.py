@@ -70,6 +70,12 @@ ALIASES = [
         "cmd": "systemctl --user restart kanata",
     },
     {
+        "key": "newip",
+        "label": "New WARP IP",
+        "mode": "quiet",
+        "cmd": "~/github/scripts/scripts/warp-new-ip.sh",
+    },
+    {
         "key": "docker-clean",
         "label": "Prune docker",
         "mode": "terminal",
