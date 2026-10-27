@@ -217,12 +217,70 @@ These are the scaffold. Session-log cards are the scar tissue. Both matter.
 
 ---
 
+## Learning-repo integration (`~/github/study`)
+
+The study repo uses a two-level progress graph and Anki review history to target sessions.
+When carding into `~/github/study`, follow these additions.
+
+### Two output shapes
+
+| Destination | Format |
+|---|---|
+| `~/github/learning/books/<slug>/` | 3 columns, no header: `question\|answer\|extra` |
+| `~/github/study/` | 4 columns, WITH header: `question\|answer\|extra\|tags` |
+
+Detect by path. Never add a header to a books CSV, and never omit it in the study repo —
+`build.sh` treats a first line starting with `question|` as a header.
+
+### Node tags are mandatory
+
+Every study card carries the graph node it belongs to in the tags column:
+
+```
+node::cs.lists.queue|exam::rbb::paper2-b
+```
+
+Use the node id from `progress/propositions.jsonl` or the session log. Without the tag, the
+Anki review history cannot be mapped back to the graph and the card is invisible to selection.
+
+### Card the wrong model, not just the right answer
+
+Review material is failure-driven, and a failure identifies a specific wrong model. When the
+session log names one (a misconception, a confident wrong answer, a confused distinction),
+write the card so that **that error is what the front triggers** and the back corrects it.
+A card that only restates the right answer leaves the wrong model intact.
+
+### Confidence and lapses
+
+- **Wrong + high confidence** (≥80) is a committed misconception. Tag it `priority::high`
+  and make the front a discrimination card against the confusable.
+- **High-lapse cards** (`progress/failing-cards.md`) are card-quality evidence before they are
+  knowledge evidence. Re-card the same proposition with a different cue class — scenario if the
+  old front was abstract, artifact if it was abstract — instead of duplicating the existing card.
+- Do not create a near-duplicate of a lapsed card. Check the existing CSV first; replace the
+  cue, not the idea.
+
+### Fresh surfaces
+
+A retest card must not reuse the original wording. Vary the cue class:
+kernel ↔ scenario ↔ artifact. Two cards that share a back are one card — merge them.
+
+---
+
 ## Output Format
 
-Plain text CSV, pipe-delimited, no header:
+Plain text CSV, pipe-delimited.
+
+Books (no header):
 
 ```
 question|answer|extra
+```
+
+Study repo (header required):
+
+```
+question|answer|extra|tags
 ```
 
 **Field rules:**
@@ -230,6 +288,7 @@ question|answer|extra
 - **question**: Standalone. Must be answerable without context. Short enough to fit in one glance. Choose it by the wild-cue rule — the situation if that's what arrives first, the kernel if explaining is the deeper test.
 - **answer**: **1 sentence max** (often just a few words). A single retrievable relationship. Not a definition — a mechanism, contrast, or implication. A self-contained statement that names its own subject, so a wrong answer shows up as wrong instead of plausibly vague.
 - **extra**: Optional. Not tested. The Context field: an analogy, the canonical example, related context, or the fact that supports the card. Leave empty if nothing to add.
+- **tags**: Study repo only. Space- or comma-separated tags; always include `node::<id>` and any `priority::high` marker. Leave the column present but empty if there is no tag.
 
 Keep both `question` and `answer` tight. If your answer needs two sentences, the question isn't focused enough — split it.
 
@@ -293,6 +352,9 @@ For grouped cards, the answer lists all items with a one-line explanation each.
 |---|---|---|
 | Source material (any `.md`) | Read | Review notes, session logs, chapter questions, chat transcripts, raw article/chapter text |
 | Output CSV | Append | Same directory as the source, named `{source-name}-anki.csv` |
+| `~/github/study/progress/failing-cards.md` | Read | High-lapse cards to re-card with a fresh cue |
+| `~/github/study/progress/propositions.jsonl` | Read | Node ids for the `node::<id>` tag |
+| `~/github/study/topics/<slug>/<slug>-anki.csv` | Append | Study deck: 4 columns + header |
 
 ---
 
@@ -324,6 +386,8 @@ After writing cards:
 - Note the mix: "8 kernels, 5 scenario-fronts, 2 facts" (approximately)
 - If sourced from first-pass material rather than failures, say so (e.g., "Sourced from raw chat log — first-pass cards, not failure-driven")
 - If the user specified a custom path, use that instead
+- Study repo: confirm the `node::<id>` tags, then run `~/github/study/build.sh` to rebuild
+  `master-anki.csv`
 - Import into Anki via File → Import, pipe-delimited. Note type: single-direction,
   fields `Front`, `Back`, `Context` (CSV `question|answer|extra` maps 1:1), `Context`
-  shown and untested. No reversed template.
+  shown and untested. No reversed template. In the study repo, map column 4 to Tags.

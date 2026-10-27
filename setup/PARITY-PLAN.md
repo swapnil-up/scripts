@@ -44,7 +44,7 @@ Decisions (locked):
   and the GoPro udev rule.
 - Toolchain versions drift because `latest` downloads and hardcoded pins are
   mixed with no manifest: starship, kanata, espanso, calibre, yt-dlp, Firefox
-  Dev, Anki 25.09, fonts 3.4.0, NVM 0.39.7, JDK 21.0.11, Android 36.
+  Dev, Anki 26.09.3, fonts 3.4.0, NVM 0.39.7, JDK 21.0.11, Android 36.
 - `languages.sh` expects nvm's installer to install Node LTS; it does not.
 - Secrets are encrypted at HEAD but unlocked in the working tree. Conky
   sources `secrets.env` without checking whether git-crypt is locked.

@@ -49,16 +49,30 @@ if ! command -v calibre &>/dev/null; then
 	curl -sSL https://download.calibre-ebook.com/linux-installer.sh | sudo sh /dev/stdin install_dir=/opt isolated=false
 fi
 
-# 5. Anki (Launcher)
-if ! command -v anki &>/dev/null; then
-	TEMP_ANKI=$(mktemp -d)
-	cd "$TEMP_ANKI"
-	curl -L "https://github.com/ankitects/anki/releases/download/${ANKI_VERSION}/anki-launcher-${ANKI_VERSION}-linux.tar.zst" -o anki-launcher.tar.zst
-	tar --use-compress-program=unzstd -xf anki-launcher.tar.zst
-	cd anki-launcher*/
-	sudo ./install.sh
-	cd "$HOME"
-	rm -rf "$TEMP_ANKI"
+# 5. Anki (tarball installer; no terminal launcher or network setup step)
+anki_installed=""
+if command -v anki &>/dev/null; then
+	anki_installed=$(anki --version 2>/dev/null | awk '/^Anki /{print $2; exit}')
+	anki_installed=$(printf '%s' "$anki_installed" | sed -E 's/(^|\.)0+([0-9])/\1\2/g')
+fi
+anki_wanted=$(printf '%s' "$ANKI_VERSION" | sed -E 's/(^|\.)0+([0-9])/\1\2/g')
+if [ "$anki_installed" != "$anki_wanted" ]; then
+	case "$(uname -m)" in
+	x86_64) ANKI_ARCH="x86_64" ;;
+	aarch64 | arm64) ANKI_ARCH="aarch64" ;;
+	*)
+		echo "Unsupported architecture for Anki: $(uname -m)" >&2
+		ANKI_ARCH=""
+		;;
+	esac
+	if [ -n "$ANKI_ARCH" ]; then
+		echo "Installing Anki ${ANKI_VERSION} (${anki_installed:-not installed})..."
+		TEMP_ANKI=$(mktemp -d)
+		curl -L --fail "https://github.com/ankitects/anki/releases/download/${ANKI_VERSION}/anki-${ANKI_VERSION}-linux-${ANKI_ARCH}.tar.zst" -o "$TEMP_ANKI/anki.tar.zst"
+		tar --use-compress-program=unzstd -xf "$TEMP_ANKI/anki.tar.zst" -C "$TEMP_ANKI"
+		(cd "$TEMP_ANKI"/anki-*-linux-* && sudo ./install.sh)
+		rm -rf "$TEMP_ANKI"
+	fi
 fi
 
 # 6. Firefox Developer Edition

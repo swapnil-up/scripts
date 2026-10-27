@@ -1,13 +1,16 @@
 ---
 name: study-sprint
 description: >
-  Sprint-based learning cycle: probe → plan → teach → cards → log. Use when
-  the user says "sprint on X", "learn X", "start learning X", "teach me X".
-  Replaces waterfall read→grill→cards flow with incremental sprints that
-  map understanding first, then teach at the edge.
+  Legacy sprint-based learning cycle: probe → plan → teach → cards → log.
+  Superseded by the `teach` skill; use this only when the user explicitly says
+  "sprint on X". The `teach` skill owns "learn X" and "teach me X".
 ---
 
 # Study Sprint
+
+> **Superseded by the `teach` skill** (`teach` modes: learn / drill / return).
+> `teach` writes the two-level progress graph and feeds Anki lapse data into
+> selection. Keep this skill only for explicitly requested "sprint" runs.
 
 Sprint-based learning cycle for ~/github/study/.
 

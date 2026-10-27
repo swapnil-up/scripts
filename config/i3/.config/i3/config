@@ -197,7 +197,7 @@ bindsym $mod+r mode "resize"
 # --- Launch Mode (Apps) ---
 set $mode_launch Launch: [f]irefox [c]ode [a]nki [n]autilus [m]pv [o]bsidian
 mode "$mode_launch" {
-    bindsym f exec --no-startup-id "command -v firefox-dev >/dev/null && firefox-dev || firefox", mode "default"
+    bindsym f exec --no-startup-id firefox-dev, mode "default"
     bindsym c exec --no-startup-id code, mode "default"
     bindsym a exec --no-startup-id anki, mode "default"
     bindsym n exec --no-startup-id nautilus --no-desktop --new-window, mode "default"
@@ -269,7 +269,7 @@ for_window [class="Anki" title="Add"] move position center
 #bindsym $mod+Shift+b exec --no-startup-id qutebrowser
 
 # start Firefox browser
-# bindsym $mod+b exec --no-startup-id "command -v firefox-dev >/dev/null && firefox-dev || firefox"
+# bindsym $mod+b exec --no-startup-id firefox-dev
 
 # Screen brightness controls
 bindsym XF86MonBrightnessUp exec --no-startup-id brightnessctl set +5% && notify-send "Brightness Up" "$(brightnessctl | grep -oP '\(\K\d+%' | head -1)"

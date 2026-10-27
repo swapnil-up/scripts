@@ -16,6 +16,7 @@ APPS_CACHE = CACHE_DIR / "apps.json"
 USAGE_CACHE = CACHE_DIR / "usage.json"
 
 DESKTOP_DIRS = [
+    Path("/usr/local/share/applications"),
     Path("/usr/share/applications"),
     Path.home() / ".local/share/applications",
     Path("/var/lib/snapd/desktop/applications"),
@@ -24,7 +25,7 @@ DESKTOP_DIRS = [
 ]
 
 CACHE_TTL = 3600  # seconds
-APPS_CACHE_VERSION = 2
+APPS_CACHE_VERSION = 3
 
 COMMANDS = [
     ("Run shell command", "./"),
@@ -430,7 +431,7 @@ def handle_command(base, sub, rest):
         else:
             url = f"https://google.com/search?q={q}"
 
-        browser = shutil.which("firefox-dev") or shutil.which("firefox")
+        browser = shutil.which("firefox-dev")
         if browser:
             subprocess.run([browser, url])
         else:

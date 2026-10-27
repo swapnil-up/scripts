@@ -13,7 +13,7 @@
   "explorer.confirmPasteNative": false,
   "git.enableSmartCommit": true,
   "git.confirmSync": false,
-  "liveServer.settings.AdvanceCustomBrowserCmdLine": "firefox --new-window",
+  "liveServer.settings.AdvanceCustomBrowserCmdLine": "firefox-dev --new-window",
   "liveServer.settings.donotShowInfoMsg": true,
   "json.schemas": [],
   "explorer.confirmDragAndDrop": false,

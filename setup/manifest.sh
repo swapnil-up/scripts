@@ -77,7 +77,6 @@ APT_DESKTOP=(
 APT_APPS=(
 	"code"
 	"ffmpeg"
-	"firefox"
 	"gedit"
 	"imagemagick"
 	"kitty"
@@ -179,7 +178,6 @@ REQUIRED_COMMANDS=(
 	"dunst"
 	"feh"
 	"ffmpeg"
-	"firefox"
 	"firefox-dev"
 	"fzf"
 	"gh"

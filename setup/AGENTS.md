@@ -54,4 +54,5 @@
 - Some packages need reboot (udev rules, user groups)
 - clipmenu builds from source each run if missing
 - Espanso AppImage needs `env-path register`
-- Anki launcher needs libxcb dependencies
+- Anki's tarball installer installs its own dependencies; it replaces older
+  installs but leaves `~/.local/share/Anki2` untouched
