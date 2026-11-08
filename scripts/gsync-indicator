@@ -9,6 +9,7 @@ import time
 
 GITHUB_DIR = os.path.expanduser("~/github")
 CHECK_INTERVAL = 30  # seconds between full checks
+DEADLINE = 8  # hard cap for a full scan (wrapper kills us at 10s)
 CACHE_FILE = f"/tmp/gsync-indicator-{os.getuid()}.json"
 
 RED = "#BF616A"
@@ -17,33 +18,35 @@ YELLOW = "#EBCB8B"
 CYAN = "#88C0D0"
 
 
-def check_repos():
+def check_repos(deadline):
     result = {"dirty": 0, "behind": 0, "ahead": 0, "total": 0, "errors": 0}
+
+    def run_git(args, cwd):
+        # Never let a single git call outlive the overall scan budget.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("gsync scan deadline reached")
+        return subprocess.run(
+            args, capture_output=True, text=True, cwd=cwd,
+            timeout=min(5, remaining),
+        )
+
     for entry in os.listdir(GITHUB_DIR):
         repo_dir = os.path.join(GITHUB_DIR, entry)
         git_dir = os.path.join(repo_dir, ".git")
         if not os.path.isdir(git_dir):
             continue
 
-        remote_url = (
-            subprocess.run(
-                ["git", "remote", "get-url", "origin"],
-                capture_output=True, text=True, cwd=repo_dir, timeout=5
-            ).stdout.strip() or ""
-        )
+        remote_url = run_git(
+            ["git", "remote", "get-url", "origin"], repo_dir
+        ).stdout.strip() or ""
         if "github.com" not in remote_url or "/swapnil-up/" not in remote_url:
             continue
 
         result["total"] += 1
 
-        branch = subprocess.run(
-            ["git", "branch", "--show-current"],
-            capture_output=True, text=True, cwd=repo_dir, timeout=5
-        ).stdout.strip()
-
-        status = subprocess.run(
-            ["git", "status", "--porcelain", "-b"],
-            capture_output=True, text=True, cwd=repo_dir, timeout=5
+        status = run_git(
+            ["git", "status", "--porcelain", "-b"], repo_dir
         ).stdout
 
         for line in status.splitlines():
@@ -60,18 +63,21 @@ def check_repos():
 
 def get_cached_or_fresh():
     now = time.time()
+    cached = None
     try:
         with open(CACHE_FILE) as f:
             data = json.load(f)
+        cached = data.get("result")
         if now - data.get("ts", 0) < CHECK_INTERVAL:
-            return data.get("result")
+            return cached
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
         pass
 
     try:
-        result = check_repos()
+        result = check_repos(time.monotonic() + DEADLINE)
     except Exception:
-        return None
+        # On any failure (timeout, git error), prefer a stale value over "?".
+        return cached
 
     with open(CACHE_FILE, "w") as f:
         json.dump({"ts": now, "result": result}, f)

@@ -88,10 +88,15 @@ for line in i3status.stdout:
             except json.JSONDecodeError:
                 pass
     except Exception:
-        subprocess.run(
-            ["notify-send", "-u", "low", "gsync-indicator", "timed out, retrying in 30s"],
-            capture_output=True, timeout=3,
-        )
+        # This handler must never take down the bar: if notify-send/dunst
+        # hangs, swallow it and keep feeding i3bar.
+        try:
+            subprocess.run(
+                ["notify-send", "-u", "low", "gsync-indicator", "timed out, retrying in 30s"],
+                capture_output=True, timeout=3,
+            )
+        except Exception:
+            pass
 
     try:
         timer = subprocess.run(
